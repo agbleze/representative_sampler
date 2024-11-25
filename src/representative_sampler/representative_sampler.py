@@ -8,7 +8,8 @@ import os
 def sample_data(img_dir: str, cluster_method: str="cluster_random", 
                 reduce_proportion: float=0.5,
                 output_dir: str = "samples", 
-                save_format: str= "coco_instances"
+                save_format: str= "coco_instances",
+                **kwargs
                 ):
     os.makedirs(output_dir, exist_ok=True)
     env = Environment()
@@ -17,6 +18,8 @@ def sample_data(img_dir: str, cluster_method: str="cluster_random",
     prune = Prune(dataset, cluster_method=cluster_method)
     cluster_random_result = prune.get_pruned(ratio=reduce_proportion)
     cluster_random_result.export(output_dir, format=save_format, save_media=True)
+
+
 
 
 
