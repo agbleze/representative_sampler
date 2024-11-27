@@ -1,0 +1,20 @@
+Experiment the impact of representative sampling of model accuracy and training time
+
+1. Instance segmentation (maskrcnnresnet50)
+Sampling method - cluster_random 50% of dataset
+- use the train and val dataset for representative sampling
+- Keep test set separate for evaluation and comparison fwih model train on full dataset
+
+other methods to experiment
+- centroid  
+- entropy -- not running 
+- Near duplicate removal
+
+-debug query_clust method and use it for experiment
+
+
+2. Use representative sampling from fiftyine brain
+   - use the sampling ratio to sample images with highest rep score
+   - have an option to include low score images to capture out of distribution images whose absense may impact accuracy
+   - consider using percentile to group images and using that for sampling
+ - 
