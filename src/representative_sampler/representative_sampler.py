@@ -11,6 +11,17 @@ def sample_data(img_dir: str, cluster_method: str="cluster_random",
                 save_format: str= "coco_instances",
                 **kwargs
                 ):
+    """_summary_
+
+    Args:
+        img_dir (str): Directory containing images
+        cluster_method (str, optional): Clustering method. Defaults to "cluster_random".
+        reduce_proportion (float, optional): Ratio of data to select (0 - 1). Defaults to 0.5.
+        output_dir (str, optional): Directory to store selected data. Defaults to "samples".
+        save_format (str, optional): format to save data. Defaults to "coco_instances".
+    Returns:
+        None
+    """
     os.makedirs(output_dir, exist_ok=True)
     env = Environment()
     detected_format = env.detect_dataset(path=img_dir)
