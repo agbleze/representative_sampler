@@ -3,9 +3,16 @@ from datumaro.components.environment import Environment
 from datumaro.components.algorithms.hash_key_inference.prune import Prune
 from datumaro.plugins.validators import DetectionValidator, SegmentationValidator
 import os
+from typing import Literal, Union
 
-
-def sample_data(img_dir: str, cluster_method: str="cluster_random", 
+def sample_data(img_dir: str, 
+                cluster_method: Literal["cluster_random", 
+                                        "query_clust", 
+                                        "centroid",
+                                        "entropy",
+                                        "ndr",
+                                        "random"
+                                        ]="cluster_random", 
                 reduce_proportion: float=0.5,
                 output_dir: str = "samples", 
                 save_format: str= "coco_instances",
