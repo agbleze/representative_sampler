@@ -36,11 +36,3 @@ def sample_data(img_dir: str,
     prune = Prune(dataset, cluster_method=cluster_method)
     cluster_random_result = prune.get_pruned(ratio=reduce_proportion)
     cluster_random_result.export(output_dir, format=save_format, save_media=True)
-
-
-
-
-
-
-
-
