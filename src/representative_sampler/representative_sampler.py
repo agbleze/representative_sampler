@@ -3,7 +3,22 @@ from datumaro.components.environment import Environment
 from datumaro.components.algorithms.hash_key_inference.prune import Prune
 from datumaro.plugins.validators import DetectionValidator, SegmentationValidator
 import os
-from typing import Literal, Union
+from typing import Literal, Union, List
+import torch
+import clip
+from PIL import Image
+import faiss
+import numpy as np
+import sklearn.metrics as skm
+import sklearn.neighbors as skn
+import sklearn.preprocessing as skp
+import logging
+import copy
+import sklearn.cluster as skc
+from scipy.spatial import cKDTree
+
+
+
 
 def sample_data(img_dir: str, 
                 cluster_method: Literal["cluster_random", 
@@ -46,6 +61,154 @@ class ImageUniqueness(object):
     
     
 from typing import List 
+
+
+def get_embeddings(img_list, model_type):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model, preprocess = clip.load(model_type, device=device)
+
+    embeddings = []
+    for img_path in img_list:
+        img = Image.open(img_path)
+        image = preprocess(img=img).unsqueeze(0).to(device)
+        with torch.no_grad():
+            image_features = model.encode_image(image)
+            embeddings.append(image_features)
+
+    return embeddings
+
+
+logger = logging.getLogger(__name__)
+
+def _compute_representativeness(embeddings, 
+                                method: Literal["cluster-center", 
+                                                "cluster-center-downweight"
+                                                ]="cluster-center",
+                                cluster_algorithm="kmeans", 
+                                N=20, 
+                                quantile=0.8, n_samples=500,
+                                bandwidth: Union[float, None, 
+                                                Literal["auto"]
+                                                ]=None,
+                                norm_method: Literal["local", "global"]="local"
+                                ):
+    #
+    # @todo experiment on which method for assessing representativeness
+    #
+    num_embeddings = len(embeddings)
+    logger.info(
+        "Computing clusters for %d embeddings; this may take awhile...",
+        num_embeddings,
+    )
+
+    initial_ranking, _ = _cluster_ranker(embeddings,
+                                         cluster_algorithm=cluster_algorithm,
+                                         N=N, quantile=quantile,
+                                         n_samples=n_samples,
+                                         bandwidth=bandwidth,
+                                         norm_method=norm_method
+                                         )
+
+    if method == "cluster-center":
+        final_ranking = initial_ranking
+    elif method == "cluster-center-downweight":
+        logger.info("Applying iterative downweighting...")
+        final_ranking = _adjust_rankings(
+            embeddings, initial_ranking, ball_radius=0.5
+        )
+    else:
+        raise ValueError(
+            (
+                "Method '%s' not supported. Please use one of "
+                "['cluster-center', 'cluster-center-downweight']"
+            )
+            % method
+        )
+
+    return final_ranking
+
+
+def _cluster_ranker(embeddings, 
+                    cluster_algorithm="kmeans", 
+                    N=20, 
+                    quantile=0.8, n_samples=500,
+                    bandwidth: Union[float, None, 
+                                     Literal["auto"]
+                                     ]=None,
+                    norm_method: Literal["local", "global"]="local"
+                    ):
+    if cluster_algorithm == "meanshift":
+        if bandwidth is None:
+            bandwidth = skc.estimate_bandwidth(embeddings, 
+                                               quantile=quantile, 
+                                               n_samples=n_samples
+                                                )
+        if bandwidth == "auto":
+            bandwidth = None
+        clusterer = skc.MeanShift(bandwidth=bandwidth, 
+                                  bin_seeding=True).fit(embeddings)   
+    elif cluster_algorithm == "kmeans":
+        clusterer = skc.KMeans(n_clusters=N, 
+                               random_state=1234
+                               ).fit(embeddings)
+    else:
+        raise ValueError(
+            (
+                "Clustering algorithm '%s' not supported. Please use one of "
+                "['meanshift', 'kmeans']"
+            )
+            % cluster_algorithm
+        )
+
+    cluster_centers = clusterer.cluster_centers_
+    cluster_ids = clusterer.labels_
+
+    # Get distance from each point to it's closest cluster center
+    sample_dists = np.linalg.norm(
+        embeddings - cluster_centers[cluster_ids], axis=1
+    )
+
+    centerness_ranking = 1 / (1 + sample_dists)
+
+    # Normalize per cluster vs globally
+    #norm_method = "local"
+    if norm_method == "global":
+        centerness_ranking = centerness_ranking / centerness_ranking.max()
+    elif norm_method == "local":
+        unique_ids = np.unique(cluster_ids)
+        for unique_id in unique_ids:
+            cluster_indices = np.where(cluster_ids == unique_id)[0]
+            cluster_dists = sample_dists[cluster_indices]
+            cluster_dists /= cluster_dists.max()
+            sample_dists[cluster_indices] = cluster_dists
+        centerness_ranking = sample_dists
+
+    return centerness_ranking, clusterer
+
+
+# Step 3: Adjust rankings to avoid redundancy
+def _adjust_rankings(embeddings, initial_ranking, ball_radius=0.5):
+    tree = cKDTree(embeddings)
+    new_ranking = copy.deepcopy(initial_ranking)
+
+    ordered_ranking = np.argsort(new_ranking)[::-1]
+    visited_indices = set()
+
+    for ranked_index in ordered_ranking:
+        visited_indices.add(ranked_index)
+        query_embedding = embeddings[ranked_index, :]
+        nearby_indices = tree.query_ball_point(
+            query_embedding, ball_radius, return_sorted=True
+        )
+        filtered_indices = [idx for idx in nearby_indices 
+                            if idx not in visited_indices
+                            ]
+        visited_indices |= set(filtered_indices)
+        new_ranking[filtered_indices] = new_ranking[filtered_indices] * 0.7
+
+    new_ranking = new_ranking / new_ranking.max()
+    return new_ranking
+
 class RepresentativenessSampler(object):
     def __init__(self, img_list: List[str],
                 method: Literal["cluster-center", 
@@ -70,7 +233,7 @@ class RepresentativenessSampler(object):
         
         
     def extract_img_features(self):
-        embeddings = get_embeddings(img_list=img_list, 
+        embeddings = get_embeddings(img_list=self.img_list, 
                                     model_type="ViT-B/32"
                                     )
         embeddings_cpu = [emb.cpu() for emb in embeddings]
@@ -97,7 +260,7 @@ class RepresentativenessSampler(object):
                                                  )
 
         self.img_representativeness_score = [(img, rep) for img, rep, in 
-                                            zip(img_list, repr_score)
+                                            zip(self.img_list, repr_score)
                                             ]
         self.img_representativeness_score
         return self.img_representativeness_score
@@ -114,7 +277,6 @@ class RepresentativenessSampler(object):
                                        key=lambda x : x[1], 
                                        reverse=True
                                        )
-        
         
         sample_end_index = int(sample_ratio * len(img_repr_score_sorted)) +1 
 
