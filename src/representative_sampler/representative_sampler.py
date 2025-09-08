@@ -17,8 +17,7 @@ import copy
 import sklearn.cluster as skc
 from scipy.spatial import cKDTree
 
-
-
+logger = logging.getLogger(__name__)
 
 def sample_data(img_dir: str, 
                 cluster_method: Literal["cluster_random", 
@@ -53,14 +52,14 @@ def sample_data(img_dir: str,
     cluster_random_result.export(output_dir, format=save_format, save_media=True)
     
 
-class ImageUniqueness(object):
-    def __init__(self, img_dir):
-        self.img_dir = img_dir 
+# class ImageUniqueness(object):
+#     def __init__(self, img_dir):
+#         self.img_dir = img_dir 
     
     
     
     
-from typing import List 
+
 
 
 def get_embeddings(img_list, model_type):
@@ -74,11 +73,7 @@ def get_embeddings(img_list, model_type):
         with torch.no_grad():
             image_features = model.encode_image(image)
             embeddings.append(image_features)
-
     return embeddings
-
-
-logger = logging.getLogger(__name__)
 
 def _compute_representativeness(embeddings, 
                                 method: Literal["cluster-center", 
