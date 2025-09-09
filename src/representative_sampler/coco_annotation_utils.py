@@ -3,6 +3,7 @@ from glob import glob
 import shutil
 import json
 from copy import deepcopy
+from pandas import json_normalize
 
 def combine_data(img_dir_list, coco_ann_filepath_list, 
                  save_img_dir_as, save_combined_coco_ann_as
@@ -17,7 +18,6 @@ def combine_data(img_dir_list, coco_ann_filepath_list,
     for img in all_imgs_path:
         shutil.copy(img, save_img_dir_as)
         
-    # combine annotations
     combined_ann = combine_annotations(list_of_annotation_paths=coco_ann_filepath_list,
                                         save_annotation_as=save_combined_coco_ann_as,
                                         info_description="Coco annotations"
@@ -105,9 +105,6 @@ def combine_annotations(list_of_annotation_paths, save_annotation_as, info_descr
                         ann["category_id"] = catname_catid_map[ann_catname]
                         annotation_id_record.append(new_annot)
                     update_list.append(ann)
-                # if update_list:
-                #     for ann in update_list:
-                #         merged_coco["annotations"].append(ann)
                 merged_coco["annotations"].extend(update_list)
     with open(save_annotation_as, "w") as f:
         json.dump(merged_coco, f)
@@ -318,3 +315,29 @@ def subset_coco_annotations(img_list, coco_annotation_file,
         json.dump(subset_json, f)
     return subset_json
 
+
+def coco_annotation_to_df(coco_annotation_file):
+    with open(coco_annotation_file, "r") as annot_file:
+        annotation = json.load(annot_file)
+    annotations_df = json_normalize(annotation, "annotations")
+    annot_imgs_df = json_normalize(annotation, "images")
+    annot_cat_df = json_normalize(annotation, "categories")
+    annotations_images_merge_df = annotations_df.merge(annot_imgs_df, left_on='image_id', 
+                                                        right_on='id',
+                                                        suffixes=("_annotation", "_image"),
+                                                        how="outer"
+                                                        )
+    annotations_imgs_cat_merge = annotations_images_merge_df.merge(annot_cat_df, left_on="category_id", right_on="id",
+                                                                    suffixes=(None, '_categories'),
+                                                                    how="outer"
+                                                                    )
+    all_merged_df = annotations_imgs_cat_merge[['id_annotation', 'image_id','category_id', 'bbox', 'area', 'segmentation', 'iscrowd',
+                                'file_name', 'height', 'width', 'name', 'supercategory'
+                                ]]
+    all_merged_df.rename(columns={"name": "category_name",
+                                  "height": "image_height",
+                                  "width": "image_width"}, 
+                         inplace=True
+                         )
+    all_merged_df.dropna(subset=["file_name"], inplace=True)
+    return all_merged_df
