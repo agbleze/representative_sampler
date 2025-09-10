@@ -362,3 +362,204 @@ class ImageUniqueness(object):
         self.sample_imgs = img_uniqueness_sorted[:sample_end_index]
         return self.sample_imgs
         
+
+
+# Adapted from datumaro
+import math
+import random
+class Centroid(PruneBase):
+    """
+    Select items through clustering with centers targeting the desired number.
+    """
+
+    def base(self, ratio, num_centers, labels, database_keys, item_list, source):
+        from sklearn.cluster import KMeans
+
+        num_selected_centers = math.ceil(len(item_list) * ratio)
+        kmeans = KMeans(n_clusters=num_selected_centers, random_state=0)
+        clusters = kmeans.fit_predict(database_keys)
+        cluster_centers = kmeans.cluster_centers_
+        cluster_ids = np.unique(clusters)
+
+        selected_items = []
+        dist_tuples = []
+        for cluster_id in cluster_ids:
+            cluster_center = cluster_centers[cluster_id]
+            cluster_items_idx = np.where(clusters == cluster_id)[0]
+            num_selected_items = 1
+            cluster_items = database_keys[cluster_items_idx,]
+            dist = calculate_hamming(cluster_center, cluster_items)
+            ind = np.argsort(dist)
+            item_idx_list = cluster_items_idx[ind]
+            for i, idx in enumerate(item_idx_list[:num_selected_items]):
+                selected_items.append(item_list[idx])
+                dist_tuples.append(
+                    (cluster_id, item_list[idx].id, item_list[idx].subset, dist[ind][i])
+                )
+        return selected_items, dist_tuples
+
+
+class ClusteredRandom(PruneBase):
+    """
+    Select items through clustering and choose randomly within each cluster.
+    """
+
+    def base(self, ratio, num_centers, labels, database_keys, item_list, source):
+        from sklearn.cluster import KMeans
+
+        kmeans = KMeans(n_clusters=num_centers, random_state=0)
+        clusters = kmeans.fit_predict(database_keys)
+        cluster_ids, cluster_num_item_list = np.unique(clusters, return_counts=True)
+
+        norm_cluster_num_item_list = match_num_item_for_cluster(
+            ratio, len(database_keys), cluster_num_item_list
+        )
+
+        selected_items = []
+        random.seed(0)
+        for i, cluster_id in enumerate(cluster_ids):
+            cluster_items_idx = np.where(clusters == cluster_id)[0]
+            num_selected_items = norm_cluster_num_item_list[i]
+            random.shuffle(cluster_items_idx)
+            selected_items.extend(item_list[idx] for idx in cluster_items_idx[:num_selected_items])
+        return selected_items, None
+
+
+class QueryClust(PruneBase):
+    """
+    Select items through clustering with inits that imply each label.
+    """
+
+    def base(self, ratio, num_centers, labels, database_keys, item_list, source):
+        from sklearn.cluster import KMeans
+
+        center_dict = {i: None for i in range(1, num_centers)}
+        for item in item_list:
+            for anno in item.annotations:
+                if isinstance(anno, Label):
+                    label_ = anno.label
+                    if center_dict.get(label_) is None:
+                        center_dict[label_] = item
+            if all(center_dict.values()):
+                break
+
+        item_id_list = [item.id.split("/")[-1] for item in item_list]
+        centroids = [
+            database_keys[item_id_list.index(item.id)] for item in center_dict.values() if item
+        ]
+        kmeans = KMeans(
+            n_clusters=num_centers, n_init=1, init=np.stack(centroids, axis=0), random_state=0
+        )
+
+        clusters = kmeans.fit_predict(database_keys)
+        cluster_centers = kmeans.cluster_centers_
+        cluster_ids, cluster_num_item_list = np.unique(clusters, return_counts=True)
+
+        norm_cluster_num_item_list = match_num_item_for_cluster(
+            ratio, len(database_keys), cluster_num_item_list
+        )
+
+        selected_items = []
+        dist_tuples = []
+        for i, cluster_id in enumerate(cluster_ids):
+            cluster_center = cluster_centers[cluster_id]
+            cluster_items_idx = np.where(clusters == cluster_id)[0]
+            num_selected_item = norm_cluster_num_item_list[i]
+
+            cluster_items = database_keys[cluster_items_idx]
+            dist = calculate_hamming(cluster_center, cluster_items)
+            ind = np.argsort(dist)
+            item_idx_list = cluster_items_idx[ind]
+            for i, idx in enumerate(item_idx_list[:num_selected_item]):
+                selected_items.append(item_list[idx])
+                dist_tuples.append(
+                    (cluster_id, item_list[idx].id, item_list[idx].subset, dist[ind][i])
+                )
+        return selected_items, dist_tuples
+
+
+class Entropy(PruneBase):
+    """
+    Select items through clustering and choose them based on label entropy in each cluster.
+    """
+
+    def base(self, ratio, num_centers, labels, database_keys, item_list, source):
+        from sklearn.cluster import KMeans
+
+        kmeans = KMeans(n_clusters=num_centers, random_state=0)
+        clusters = kmeans.fit_predict(database_keys)
+
+        cluster_ids, cluster_num_item_list = np.unique(clusters, return_counts=True)
+        norm_cluster_num_item_list = match_num_item_for_cluster(
+            ratio, len(database_keys), cluster_num_item_list
+        )
+
+        selected_item_indexes = []
+        for cluster_id, num_selected_item in zip(cluster_ids, norm_cluster_num_item_list):
+            cluster_items_idx = np.where(clusters == cluster_id)[0]
+
+            cluster_classes = np.array(labels)[cluster_items_idx]
+            _, inv, cnts = np.unique(cluster_classes, return_inverse=True, return_counts=True)
+            weights = 1 / cnts
+            probs = weights[inv]
+            probs /= probs.sum()
+
+            choices = np.random.choice(len(inv), size=num_selected_item, p=probs, replace=False)
+            selected_item_indexes.extend(cluster_items_idx[choices])
+
+        selected_items = np.array(item_list)[selected_item_indexes].tolist()
+        return selected_items, None
+
+
+
+def match_num_item_for_cluster(ratio, dataset_len, cluster_num_item_list):
+    total_num_selected_item = math.ceil(dataset_len * ratio)
+
+    cluster_weights = np.array(cluster_num_item_list) / sum(cluster_num_item_list)
+    norm_cluster_num_item_list = (cluster_weights * total_num_selected_item).astype(int)
+    remaining_items = total_num_selected_item - sum(norm_cluster_num_item_list)
+
+    if remaining_items > 0:
+        zero_cluster_indexes = np.where(norm_cluster_num_item_list == 0)[0]
+        add_clust_dist = np.sort(cluster_weights[zero_cluster_indexes])[::-1][:remaining_items]
+
+        for dist in set(add_clust_dist):
+            indices = np.where(cluster_weights == dist)[0]
+            for index in indices:
+                norm_cluster_num_item_list[index] += 1
+
+    elif remaining_items < 0:
+        diff_num_item_list = np.argsort(cluster_weights - norm_cluster_num_item_list)
+        for diff_idx in diff_num_item_list[: abs(remaining_items)]:
+            norm_cluster_num_item_list[diff_idx] -= 1
+
+    return norm_cluster_num_item_list.tolist()
+
+
+
+def calculate_hamming(B1, B2):
+    """
+    :param B1:  vector [n]
+    :param B2:  vector [r*n]
+    :return: hamming distance [r]
+    """
+    return np.count_nonzero(B1 != B2, axis=1)
+
+
+def match_query_subset(query_id, dataset, subset=None):
+    if subset:
+        return dataset.get(query_id, subset)
+
+    subset_names = dataset.subsets().keys()
+    for subset_name in subset_names:
+        try:
+            query_datasetitem = dataset.get(query_id, subset_name)
+            if query_datasetitem:
+                return query_datasetitem
+        except Exception:
+            pass
+
+    return None
+
+
+
