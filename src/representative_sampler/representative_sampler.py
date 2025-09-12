@@ -1,7 +1,6 @@
 from datumaro.components.dataset import Dataset
 from datumaro.components.environment import Environment
 from datumaro.components.algorithms.hash_key_inference.prune import Prune
-from datumaro.plugins.validators import DetectionValidator, SegmentationValidator
 import os
 from typing import Literal, Union, List
 import torch
@@ -367,7 +366,7 @@ class ImageUniqueness(object):
 # Adapted from datumaro
 import math
 import random
-class Centroid(PruneBase):
+class Centroid(object):
     """
     Select items through clustering with centers targeting the desired number.
     """
@@ -399,7 +398,7 @@ class Centroid(PruneBase):
         return selected_items, dist_tuples
 
 
-class ClusteredRandom(PruneBase):
+class ClusteredRandom(object):
     """
     Select items through clustering and choose randomly within each cluster.
     """
@@ -425,7 +424,7 @@ class ClusteredRandom(PruneBase):
         return selected_items, None
 
 
-class QueryClust(PruneBase):
+class QueryClust(object):
     """
     Select items through clustering with inits that imply each label.
     """
@@ -478,7 +477,7 @@ class QueryClust(PruneBase):
         return selected_items, dist_tuples
 
 
-class Entropy(PruneBase):
+class Entropy(object):
     """
     Select items through clustering and choose them based on label entropy in each cluster.
     """
