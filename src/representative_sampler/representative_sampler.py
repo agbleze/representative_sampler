@@ -656,4 +656,5 @@ def compute_cluster_entropy(cluster_ids, embeddings, K):
         hist, _ = np.histogram(dists, bins=10, density=True)
         cluster_entropy = entropy(hist)
         cluster_entropies.append((k, cluster_entropy, idxs))
+    return cluster_entropies
 
