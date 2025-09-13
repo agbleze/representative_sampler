@@ -15,6 +15,7 @@ import logging
 import copy
 import sklearn.cluster as skc
 from scipy.spatial import cKDTree
+from sklearn.cluster import KMeans
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,24 @@ def get_embeddings(img_list, model_type):
             embeddings.append(image_features)
     return embeddings
 
+
+class EmbeddingExtractor(object):
+    def __init__(self, img_list, model_type):
+        self.img_list = img_list
+        self.model_type = model_type
+        
+    def _extract_img_features(self):
+        embeddings = get_embeddings(img_list=self.img_list, 
+                                    model_type=self.model_type
+                                    )
+        embeddings_cpu = [emb.cpu() for emb in embeddings]
+        embeddings_cpu_concat = np.concatenate(embeddings_cpu)
+        self.normalized_embedding = skp.normalize(embeddings_cpu_concat, 
+                                       axis=1
+                                       )
+        return self.normalized_embedding
+    
+    
 def _compute_representativeness(embeddings, 
                                 method: Literal["cluster-center", 
                                                 "cluster-center-downweight"
@@ -366,17 +385,33 @@ class ImageUniqueness(object):
 # Adapted from datumaro
 import math
 import random
-class Centroid(object):
+class Centroid(EmbeddingExtractor):
     """
     Select items through clustering with centers targeting the desired number.
+    
+    Number of items to subset are used as n_clusters and the centroid of each selected
     """
+    def __init__(self, img_list: List[str], 
+                 n_clusters: int,
+                 model_type: str ="ViT-B/32",
+                 
+                ):
+        super.__init__(img_list, model_type)
+        self.img_list = img_list
+        self.model_type = model_type
+        self.n_clusters = n_clusters
 
-    def base(self, ratio, num_centers, labels, database_keys, item_list, source):
-        from sklearn.cluster import KMeans
+    def extract_img_features(self):
+        self.normalized_embedding = self._extract_img_features()
+        
+    def base(self, 
+             #ratio, num_centers, labels, 
+             #database_keys, item_list,
+             ):
 
-        num_selected_centers = math.ceil(len(item_list) * ratio)
-        kmeans = KMeans(n_clusters=num_selected_centers, random_state=0)
-        clusters = kmeans.fit_predict(database_keys)
+        #num_selected_centers = int(len(self.img_list) * ratio) #math.ceil(len(item_list) * ratio)
+        kmeans = KMeans(n_clusters=self.n_clusters, random_state=0)
+        clusters = kmeans.fit_predict(self.normalized_embedding) #(database_keys)
         cluster_centers = kmeans.cluster_centers_
         cluster_ids = np.unique(clusters)
 
@@ -386,33 +421,55 @@ class Centroid(object):
             cluster_center = cluster_centers[cluster_id]
             cluster_items_idx = np.where(clusters == cluster_id)[0]
             num_selected_items = 1
-            cluster_items = database_keys[cluster_items_idx,]
+            cluster_items = self.normalized_embedding[cluster_items_idx,] #database_keys[cluster_items_idx,]
             dist = calculate_hamming(cluster_center, cluster_items)
             ind = np.argsort(dist)
             item_idx_list = cluster_items_idx[ind]
             for i, idx in enumerate(item_idx_list[:num_selected_items]):
-                selected_items.append(item_list[idx])
-                dist_tuples.append(
-                    (cluster_id, item_list[idx].id, item_list[idx].subset, dist[ind][i])
-                )
-        return selected_items, dist_tuples
+                selected_items.append(self.img_list[idx]) #(item_list[idx])
+                # dist_tuples.append(
+                #     (cluster_id, item_list[idx].id, item_list[idx].subset, dist[ind][i])
+                # )
+        return selected_items#, dist_tuples
 
 
-class ClusteredRandom(object):
+class ClusteredRandom(EmbeddingExtractor):
     """
     Select items through clustering and choose randomly within each cluster.
     """
+    
+    def __init__(self, img_list: List[str], 
+                 n_clusters: int,
+                 model_type: str ="ViT-B/32",
+                 sample_ratio: float = 0.5,
+                ):
+        super.__init__(img_list, model_type)
+        self.img_list = img_list
+        self.model_type = model_type
+        self.n_clusters = n_clusters
+        self.sample_ratio = sample_ratio
 
-    def base(self, ratio, num_centers, labels, database_keys, item_list, source):
-        from sklearn.cluster import KMeans
+    def extract_img_features(self):
+        self.normalized_embedding = self._extract_img_features()
+        
+    def base(self, #ratio, num_centers, labels, 
+             #database_keys, item_list, source
+             ):
+        if hasattr(self, "normalized_embedding"):
+            normalized_embedding = self.normalized_embedding
+        else:
+            normalized_embedding = self.extract_img_features()
 
-        kmeans = KMeans(n_clusters=num_centers, random_state=0)
-        clusters = kmeans.fit_predict(database_keys)
+        kmeans = KMeans(n_clusters=self.n_clusters, #num_centers, 
+                        random_state=0)
+        clusters = kmeans.fit_predict(normalized_embedding) #(database_keys)
         cluster_ids, cluster_num_item_list = np.unique(clusters, return_counts=True)
 
-        norm_cluster_num_item_list = match_num_item_for_cluster(
-            ratio, len(database_keys), cluster_num_item_list
-        )
+        norm_cluster_num_item_list = match_num_item_for_cluster(self.sample_ratio,
+                                                                #ratio, 
+                                                                len(normalized_embedding),#len(database_keys), 
+                                                                cluster_num_item_list
+                                                                )
 
         selected_items = []
         random.seed(0)
@@ -420,78 +477,101 @@ class ClusteredRandom(object):
             cluster_items_idx = np.where(clusters == cluster_id)[0]
             num_selected_items = norm_cluster_num_item_list[i]
             random.shuffle(cluster_items_idx)
-            selected_items.extend(item_list[idx] for idx in cluster_items_idx[:num_selected_items])
-        return selected_items, None
+            #selected_items.extend(item_list[idx] for idx in cluster_items_idx[:num_selected_items])
+            selected_items.extend(self.img_list[idx] for idx in cluster_items_idx[:num_selected_items])
+        return selected_items #, None
 
 
-class QueryClust(object):
-    """
-    Select items through clustering with inits that imply each label.
-    """
+# class QueryClust(object):
+#     """
+#     Select items through clustering with inits that imply each label.
+#     """
 
-    def base(self, ratio, num_centers, labels, database_keys, item_list, source):
-        from sklearn.cluster import KMeans
+#     def base(self, ratio, num_centers, labels, database_keys, item_list, source):
+#         from sklearn.cluster import KMeans
 
-        center_dict = {i: None for i in range(1, num_centers)}
-        for item in item_list:
-            for anno in item.annotations:
-                if isinstance(anno, Label):
-                    label_ = anno.label
-                    if center_dict.get(label_) is None:
-                        center_dict[label_] = item
-            if all(center_dict.values()):
-                break
+#         center_dict = {i: None for i in range(1, num_centers)}
+#         for item in item_list:
+#             for anno in item.annotations:
+#                 if isinstance(anno, Label):
+#                     label_ = anno.label
+#                     if center_dict.get(label_) is None:
+#                         center_dict[label_] = item
+#             if all(center_dict.values()):
+#                 break
 
-        item_id_list = [item.id.split("/")[-1] for item in item_list]
-        centroids = [
-            database_keys[item_id_list.index(item.id)] for item in center_dict.values() if item
-        ]
-        kmeans = KMeans(
-            n_clusters=num_centers, n_init=1, init=np.stack(centroids, axis=0), random_state=0
-        )
+#         item_id_list = [item.id.split("/")[-1] for item in item_list]
+#         centroids = [
+#             database_keys[item_id_list.index(item.id)] for item in center_dict.values() if item
+#         ]
+#         kmeans = KMeans(
+#             n_clusters=num_centers, n_init=1, init=np.stack(centroids, axis=0), random_state=0
+#         )
 
-        clusters = kmeans.fit_predict(database_keys)
-        cluster_centers = kmeans.cluster_centers_
-        cluster_ids, cluster_num_item_list = np.unique(clusters, return_counts=True)
+#         clusters = kmeans.fit_predict(database_keys)
+#         cluster_centers = kmeans.cluster_centers_
+#         cluster_ids, cluster_num_item_list = np.unique(clusters, return_counts=True)
 
-        norm_cluster_num_item_list = match_num_item_for_cluster(
-            ratio, len(database_keys), cluster_num_item_list
-        )
+#         norm_cluster_num_item_list = match_num_item_for_cluster(
+#             ratio, len(database_keys), cluster_num_item_list
+#         )
 
-        selected_items = []
-        dist_tuples = []
-        for i, cluster_id in enumerate(cluster_ids):
-            cluster_center = cluster_centers[cluster_id]
-            cluster_items_idx = np.where(clusters == cluster_id)[0]
-            num_selected_item = norm_cluster_num_item_list[i]
+#         selected_items = []
+#         dist_tuples = []
+#         for i, cluster_id in enumerate(cluster_ids):
+#             cluster_center = cluster_centers[cluster_id]
+#             cluster_items_idx = np.where(clusters == cluster_id)[0]
+#             num_selected_item = norm_cluster_num_item_list[i]
 
-            cluster_items = database_keys[cluster_items_idx]
-            dist = calculate_hamming(cluster_center, cluster_items)
-            ind = np.argsort(dist)
-            item_idx_list = cluster_items_idx[ind]
-            for i, idx in enumerate(item_idx_list[:num_selected_item]):
-                selected_items.append(item_list[idx])
-                dist_tuples.append(
-                    (cluster_id, item_list[idx].id, item_list[idx].subset, dist[ind][i])
-                )
-        return selected_items, dist_tuples
+#             cluster_items = database_keys[cluster_items_idx]
+#             dist = calculate_hamming(cluster_center, cluster_items)
+#             ind = np.argsort(dist)
+#             item_idx_list = cluster_items_idx[ind]
+#             for i, idx in enumerate(item_idx_list[:num_selected_item]):
+#                 selected_items.append(item_list[idx])
+#                 dist_tuples.append(
+#                     (cluster_id, item_list[idx].id, item_list[idx].subset, dist[ind][i])
+#                 )
+#         return selected_items, dist_tuples
 
 
-class Entropy(object):
+class Entropy(EmbeddingExtractor):
     """
     Select items through clustering and choose them based on label entropy in each cluster.
     """
+    
+    def __init__(self, img_list: List[str], 
+                 n_clusters: int,
+                 model_type: str ="ViT-B/32",
+                 sample_ratio: float = 0.5,
+                ):
+        super.__init__(img_list, model_type)
+        self.img_list = img_list
+        self.model_type = model_type
+        self.n_clusters = n_clusters
+        self.sample_ratio = sample_ratio
 
-    def base(self, ratio, num_centers, labels, database_keys, item_list, source):
-        from sklearn.cluster import KMeans
+    def extract_img_features(self):
+        self.normalized_embedding = self._extract_img_features()
 
-        kmeans = KMeans(n_clusters=num_centers, random_state=0)
-        clusters = kmeans.fit_predict(database_keys)
+    def base(self, labels,
+             #ratio, num_centers, labels, database_keys, item_list, source
+             ):
+        if hasattr(self, "normalized_embedding"):
+            normalized_embedding = self.normalized_embedding
+        else:
+            normalized_embedding = self.extract_img_features()
+        kmeans = KMeans(n_clusters=self.n_clusters, #num_centers, 
+                        random_state=0
+                        )
+        clusters = kmeans.fit_predict(normalized_embedding) #fit_predict(database_keys)
 
         cluster_ids, cluster_num_item_list = np.unique(clusters, return_counts=True)
         norm_cluster_num_item_list = match_num_item_for_cluster(
-            ratio, len(database_keys), cluster_num_item_list
-        )
+                                                                #ratio, len(database_keys), 
+                                                                self.sample_ratio, len(normalized_embedding),
+                                                                cluster_num_item_list
+                                                                )
 
         selected_item_indexes = []
         for cluster_id, num_selected_item in zip(cluster_ids, norm_cluster_num_item_list):
@@ -503,16 +583,18 @@ class Entropy(object):
             probs = weights[inv]
             probs /= probs.sum()
 
-            choices = np.random.choice(len(inv), size=num_selected_item, p=probs, replace=False)
+            choices = np.random.choice(len(inv), size=num_selected_item, 
+                                       p=probs, replace=False
+                                       )
             selected_item_indexes.extend(cluster_items_idx[choices])
 
         selected_items = np.array(item_list)[selected_item_indexes].tolist()
-        return selected_items, None
+        return selected_items #, None
 
 
 
 def match_num_item_for_cluster(ratio, dataset_len, cluster_num_item_list):
-    total_num_selected_item = math.ceil(dataset_len * ratio)
+    total_num_selected_item = int(dataset_len * ratio) #math.ceil(dataset_len * ratio)
 
     cluster_weights = np.array(cluster_num_item_list) / sum(cluster_num_item_list)
     norm_cluster_num_item_list = (cluster_weights * total_num_selected_item).astype(int)
@@ -561,4 +643,17 @@ def match_query_subset(query_id, dataset, subset=None):
     return None
 
 
+def compute_cluster_entropy(cluster_ids, embeddings, K):
+    from scipy.stats import entropy
+    import numpy as np
+
+    cluster_entropies = []
+    for k in range(K):
+        idxs = np.where(cluster_ids == k)[0]
+        cluster_embeddings = embeddings[idxs]
+        cluster_centroid = cluster_embeddings.mean(axis=0)
+        dists = np.linalg.norm(cluster_embeddings - cluster_centroid, axis=1)
+        hist, _ = np.histogram(dists, bins=10, density=True)
+        cluster_entropy = entropy(hist)
+        cluster_entropies.append((k, cluster_entropy, idxs))
 
