@@ -794,7 +794,6 @@ def _entropy_based_sampling(img_list: List[str],
                             ):            
     _img_list = deepcopy(img_list)
     selected_imgs = []
-    #remaining = total_sample_size
     shortage = 0
     _cluster_metadata = deepcopy(cluster_metadata)
     for clust in _cluster_metadata:
@@ -803,7 +802,6 @@ def _entropy_based_sampling(img_list: List[str],
             cluster_indices = clust.cluster_indices.tolist()
             imgs = [_img_list[i] for i in cluster_indices]
             selected_imgs.extend(imgs)
-            #remaining -= clust.cluster_sampling_size
             shortage += clust.cluster_sampling_size - clust.cluster_size
             _cluster_metadata.remove(clust)
             
