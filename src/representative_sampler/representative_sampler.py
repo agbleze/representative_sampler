@@ -2,7 +2,7 @@ from datumaro.components.dataset import Dataset
 from datumaro.components.environment import Environment
 from datumaro.components.algorithms.hash_key_inference.prune import Prune
 import os
-from typing import Literal, Union, List
+from typing import Literal, Union, List, Optional
 import torch
 import clip
 from PIL import Image
@@ -16,9 +16,26 @@ import copy
 import sklearn.cluster as skc
 from scipy.spatial import cKDTree
 from sklearn.cluster import KMeans
+from scipy.stats import entropy
+from dataclasses import dataclass, field
+from copy import deepcopy    
+from abc import ABC, abstractmethod
+
 
 logger = logging.getLogger(__name__)
 
+np.random.seed(0)
+
+# create an abstract class sampler that other representative samplers subclass
+# sample must have abstract methods - sample
+
+class Sampler(ABC):
+    
+    @abstractmethod
+    def sample(self):
+        pass
+    
+    
 def sample_data(img_dir: str, 
                 cluster_method: Literal["cluster_random", 
                                         "query_clust", 
@@ -55,12 +72,19 @@ def sample_data(img_dir: str,
 # class ImageUniqueness(object):
 #     def __init__(self, img_dir):
 #         self.img_dir = img_dir 
-    
-    
-    
-    
 
-
+@dataclass
+class ClusterMetadata:
+    cluster_name: int = field(default_factory=int)
+    cluster_size: int = field(default_factory=int)
+    cluster_entropy: float = field(default_factory=float)
+    cluster_weight: float = field(default_factory=float)
+    cluster_sampling_size: int = field(default_factory=int)
+    cluster_indices: Union[np.ndarray, int] = field(default_factory=int)
+    
+    #def __post_init__(self):
+        #self.cluster_sampling_size = 
+        
 
 def get_embeddings(img_list, model_type):
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -88,8 +112,8 @@ class EmbeddingExtractor(object):
         embeddings_cpu = [emb.cpu() for emb in embeddings]
         embeddings_cpu_concat = np.concatenate(embeddings_cpu)
         self.normalized_embedding = skp.normalize(embeddings_cpu_concat, 
-                                       axis=1
-                                       )
+                                                    axis=1
+                                                    )
         return self.normalized_embedding
     
     
@@ -545,16 +569,19 @@ class Entropy(EmbeddingExtractor):
                  model_type: str ="ViT-B/32",
                  sample_ratio: float = 0.5,
                 ):
-        super.__init__(img_list, model_type)
+        super().__init__(img_list=img_list, model_type=model_type)
         self.img_list = img_list
         self.model_type = model_type
         self.n_clusters = n_clusters
         self.sample_ratio = sample_ratio
+        self.total_sample_size = int(len(img_list) * sample_ratio)
 
     def extract_img_features(self):
         self.normalized_embedding = self._extract_img_features()
+        return self.normalized_embedding
 
-    def base(self, labels,
+    def base(self, #labels,
+             alpha: Optional[float]=None,
              #ratio, num_centers, labels, database_keys, item_list, source
              ):
         if hasattr(self, "normalized_embedding"):
@@ -567,29 +594,68 @@ class Entropy(EmbeddingExtractor):
         clusters = kmeans.fit_predict(normalized_embedding) #fit_predict(database_keys)
 
         cluster_ids, cluster_num_item_list = np.unique(clusters, return_counts=True)
-        norm_cluster_num_item_list = match_num_item_for_cluster(
-                                                                #ratio, len(database_keys), 
-                                                                self.sample_ratio, len(normalized_embedding),
-                                                                cluster_num_item_list
-                                                                )
+        
+        cluster_metadata = [ClusterMetadata(cluster_name=id, 
+                                            cluster_size=count,
+                                            cluster_indices=np.where(clusters == id)[0],                                            
+                                            ) 
+                            for id, count in zip(cluster_ids, cluster_num_item_list)
+                            ]
+        #print(cluster_metadata[0].cluster_indices)
+        # for cl in cluster_metadata:
+        #     print(cl.cluster_name)
+        #     print(cl.cluster_indices)
+        #     print(cl.cluster_size)
+        # exit()
+        
+        cluster_metadata = compute_cluster_entropy(cluster_metadata=cluster_metadata,
+                                                    embeddings=normalized_embedding
+                                                    )
+        if alpha is None:
+            cluster_metadata = compute_weights(cluster_metadata=cluster_metadata)
+        else:
+            cluster_metadata = normalize_entropy(cluster_metadata=cluster_metadata)
+            cluster_metadata = compute_combine_weight(cluster_metadata=cluster_metadata,
+                                                    alpha=alpha
+                                                    )
+        cluster_metadata = set_cluster_sampling_size(cluster_metadata=cluster_metadata,
+                                                    total_sample_size=self.total_sample_size
+                                                    ) 
+        selected_imgs = self.sample(img_list=self.img_list,
+                               cluster_metadata=cluster_metadata
+                               )
+        return selected_imgs
+    
+    def sample(self, img_list, cluster_metadata):
+        selected_items = _entropy_based_sampling(img_list=img_list, 
+                                                cluster_metadata=cluster_metadata
+                                                )
+        return selected_items
+        
+        
+        # norm_cluster_num_item_list = match_num_item_for_cluster(
+        #                                                         #ratio, len(database_keys), 
+        #                                                         self.sample_ratio, len(normalized_embedding),
+        #                                                         cluster_num_item_list
+        #                                                         )
 
-        selected_item_indexes = []
-        for cluster_id, num_selected_item in zip(cluster_ids, norm_cluster_num_item_list):
-            cluster_items_idx = np.where(clusters == cluster_id)[0]
+        # selected_item_indexes = []
+        # for cluster_id, num_selected_item in zip(cluster_ids, norm_cluster_num_item_list):
+        #     cluster_items_idx = np.where(clusters == cluster_id)[0]
 
-            cluster_classes = np.array(labels)[cluster_items_idx]
-            _, inv, cnts = np.unique(cluster_classes, return_inverse=True, return_counts=True)
-            weights = 1 / cnts
-            probs = weights[inv]
-            probs /= probs.sum()
+        #     cluster_classes = np.array(labels)[cluster_items_idx]
+        #     _, inv, cnts = np.unique(cluster_classes, return_inverse=True, return_counts=True)
+        #     weights = 1 / cnts
+        #     probs = weights[inv]
+        #     probs /= probs.sum()
 
-            choices = np.random.choice(len(inv), size=num_selected_item, 
-                                       p=probs, replace=False
-                                       )
-            selected_item_indexes.extend(cluster_items_idx[choices])
+        #     choices = np.random.choice(len(inv), size=num_selected_item, 
+        #                                p=probs, replace=False
+        #                                )
+        #     selected_item_indexes.extend(cluster_items_idx[choices])
 
-        selected_items = np.array(item_list)[selected_item_indexes].tolist()
-        return selected_items #, None
+        # selected_items = np.array(item_list)[selected_item_indexes].tolist()
+        # return selected_items #, None
 
 
 
@@ -639,22 +705,135 @@ def match_query_subset(query_id, dataset, subset=None):
                 return query_datasetitem
         except Exception:
             pass
-
     return None
 
 
-def compute_cluster_entropy(cluster_ids, embeddings, K):
-    from scipy.stats import entropy
-    import numpy as np
+def compute_cluster_entropy(cluster_metadata: Union[List[ClusterMetadata], 
+                                                    ClusterMetadata
+                                                    ], 
+                            embeddings
+                            ):
+    if isinstance(cluster_metadata, ClusterMetadata):
+        cluster_metadata = [cluster_metadata]
+        
+    for clust_met in  cluster_metadata:
+        cluster_embeddings = embeddings[clust_met.cluster_indices]
+        cluster_centroid = cluster_embeddings.mean(axis=0),
 
-    cluster_entropies = []
-    for k in range(K):
-        idxs = np.where(cluster_ids == k)[0]
-        cluster_embeddings = embeddings[idxs]
-        cluster_centroid = cluster_embeddings.mean(axis=0)
-        dists = np.linalg.norm(cluster_embeddings - cluster_centroid, axis=1)
+        dists =  np.linalg.norm(cluster_embeddings - cluster_centroid, axis=1)  
         hist, _ = np.histogram(dists, bins=10, density=True)
         cluster_entropy = entropy(hist)
-        cluster_entropies.append((k, cluster_entropy, idxs))
-    return cluster_entropies
+        setattr(clust_met, "cluster_entropy", cluster_entropy)
+    if len(cluster_metadata) == 1:
+        return cluster_metadata[0]
+    else:
+        return cluster_metadata
 
+
+def compute_weights(cluster_metadata: List[ClusterMetadata]):
+    entropies = np.array([clust.cluster_entropy for clust in cluster_metadata])
+    total_entropy = entropies.sum()
+    for clust in cluster_metadata:
+        weight = clust.cluster_entropy / total_entropy
+        setattr(clust, "cluster_weight", weight)
+    return cluster_metadata
+
+
+def get_sample_indices(embeddings, weights, cluster_entropies, sample_ratio=0.5):
+    target_size = int(sample_ratio * len(embeddings))  # 50% reduction
+    samples_per_cluster = (weights * target_size).astype(int)
+    selected_indices = []
+    for (k, _, idxs), n_samples in zip(cluster_entropies, samples_per_cluster):
+        chosen = np.random.choice(idxs, size=min(n_samples, len(idxs)), replace=False)
+        selected_indices.extend(chosen)
+
+
+
+def normalize_entropy(cluster_metadata: List[ClusterMetadata]):
+    raw_entropies = np.array([clust.cluster_entropy for clust in cluster_metadata])
+    max_entropy = np.max(raw_entropies)
+    for clust in cluster_metadata:
+        normalized_entropy = clust.cluster_entropy / max_entropy
+        setattr(clust, "cluster_entropy", normalized_entropy)
+    
+    return cluster_metadata
+
+
+def compute_combine_weight(cluster_metadata: List[ClusterMetadata], 
+                           alpha = 0.7, # controls how much entropy influences sampling                           
+                           ):
+    # use normalized entropy
+    cluster_sizes = np.array([clust.cluster_size for clust in cluster_metadata])
+    total_cluster_sizes = cluster_sizes.sum() 
+    for clust in cluster_metadata:
+        relative_cluster_size = clust.cluster_size / total_cluster_sizes
+        weight = alpha * clust.entropy + (1 - alpha) * relative_cluster_size
+        setattr(clust, "relative_cluster_size", relative_cluster_size)
+        setattr(clust, "cluster_weight", weight)
+    return cluster_metadata
+
+def set_cluster_sampling_size(cluster_metadata: List[ClusterMetadata],
+                              total_sample_size
+                              ):
+    for clust in cluster_metadata:
+        cluster_sample_size = int(clust.cluster_weight * total_sample_size)
+        setattr(clust, "cluster_sampling_size", cluster_sample_size)
+        
+        if cluster_sample_size > clust.cluster_size:
+            setattr(clust, "sample_shortage", True)
+        else:
+            setattr(clust, "sample_shortage", False)
+    
+    return cluster_metadata
+
+
+def _entropy_based_sampling(img_list: List[str], 
+                            cluster_metadata: Union[List[ClusterMetadata], 
+                                                    ClusterMetadata
+                                                    ]
+                            ):            
+    _img_list = deepcopy(img_list)
+    selected_imgs = []
+    #remaining = total_sample_size
+    shortage = 0
+    _cluster_metadata = deepcopy(cluster_metadata)
+    for clust in _cluster_metadata:
+        if clust.sample_shortage == True:
+            print(f"shortage in cluster {clust.cluster_name}")
+            cluster_indices = clust.cluster_indices.tolist()
+            imgs = [_img_list[i] for i in cluster_indices]
+            selected_imgs.extend(imgs)
+            #remaining -= clust.cluster_sampling_size
+            shortage += clust.cluster_sampling_size - clust.cluster_size
+            _cluster_metadata.remove(clust)
+            
+    if shortage > 0:
+        print(f"total cluster shortage: {shortage}")
+        # sample rest of samples from the largest cluster
+        _cluster_sizes = np.array([clust.cluster_size for clust in _cluster_metadata])
+        largest_cluster_index = np.argmax(_cluster_sizes)
+        largest_cluster = _cluster_metadata[largest_cluster_index]
+        print(f"largest cluster {largest_cluster.cluster_name} --- size {largest_cluster.cluster_size}")
+        np.random.seed(0)
+        seleted_shortage_indices = np.random.choice(largest_cluster.cluster_indices, 
+                                                    size=shortage, replace=False
+                                                    )
+        _imgs = [_img_list[i] for i in seleted_shortage_indices]
+        selected_imgs.extend(_imgs)
+    
+    for _clust in _cluster_metadata:
+        print(f"cluster name {_clust.cluster_name} --- size {_clust.cluster_size} --- cluster sample size {_clust.cluster_sampling_size}")
+        
+        if _clust.cluster_size == _clust.cluster_sampling_size:
+            _imgs = [_img_list[i] for i in _clust.cluster_indices]
+            selected_imgs.extend(_imgs)
+        else:
+            selected_indices = np.random.choice(_clust.cluster_indices, size=_clust.cluster_sampling_size,
+                                                replace=False
+                                                )
+            _imgs = [_img_list[i] for i in selected_indices]
+            selected_imgs.extend(_imgs)
+    return selected_imgs
+        
+        
+        
