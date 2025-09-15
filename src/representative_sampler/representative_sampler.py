@@ -570,11 +570,14 @@ class Entropy(EmbeddingExtractor):
                  sample_ratio: float = 0.5,
                 ):
         super().__init__(img_list=img_list, model_type=model_type)
-        self.img_list = img_list
-        self.model_type = model_type
+        #self.img_list = img_list
+        #self.model_type = model_type
         self.n_clusters = n_clusters
         self.sample_ratio = sample_ratio
         self.total_sample_size = int(len(img_list) * sample_ratio)
+        
+        if self.total_sample_size == n_clusters:
+            raise ValueError(f"n_clusters {n_clusters} is same as total sample size and entropy is not needed for this. Ensure n_clusters is much lesser")
 
     def extract_img_features(self):
         self.normalized_embedding = self._extract_img_features()
