@@ -767,7 +767,7 @@ def compute_combine_weight(cluster_metadata: List[ClusterMetadata],
     total_cluster_sizes = cluster_sizes.sum() 
     for clust in cluster_metadata:
         relative_cluster_size = clust.cluster_size / total_cluster_sizes
-        weight = alpha * clust.entropy + (1 - alpha) * relative_cluster_size
+        weight = alpha * clust.cluster_entropy + (1 - alpha) * relative_cluster_size
         setattr(clust, "relative_cluster_size", relative_cluster_size)
         setattr(clust, "cluster_weight", weight)
     return cluster_metadata
@@ -820,7 +820,7 @@ def _entropy_based_sampling(img_list: List[str],
         selected_imgs.extend(_imgs)
     
     for _clust in _cluster_metadata:
-        print(f"cluster name {_clust.cluster_name} --- size {_clust.cluster_size} --- cluster sample size {_clust.cluster_sampling_size}")
+        print(f"cluster name {_clust.cluster_name} --- size {_clust.cluster_size} --- cluster sample size {_clust.cluster_sampling_size} -- entropy {_clust.cluster_entropy}")
         
         if _clust.cluster_size == _clust.cluster_sampling_size:
             _imgs = [_img_list[i] for i in _clust.cluster_indices]
