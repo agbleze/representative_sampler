@@ -614,6 +614,7 @@ class Entropy(EmbeddingExtractor):
         if alpha is None:
             cluster_metadata = compute_weights(cluster_metadata=cluster_metadata)
         else:
+            print(f"alpha: {alpha}")
             cluster_metadata = normalize_entropy(cluster_metadata=cluster_metadata)
             cluster_metadata = compute_combine_weight(cluster_metadata=cluster_metadata,
                                                     alpha=alpha
@@ -718,11 +719,16 @@ def compute_cluster_entropy(cluster_metadata: Union[List[ClusterMetadata],
         
     for clust_met in  cluster_metadata:
         cluster_embeddings = embeddings[clust_met.cluster_indices]
-        cluster_centroid = cluster_embeddings.mean(axis=0),
+        cluster_centroid = cluster_embeddings.mean(axis=0)
 
         dists =  np.linalg.norm(cluster_embeddings - cluster_centroid, axis=1)  
-        hist, _ = np.histogram(dists, bins=10, density=True)
-        cluster_entropy = entropy(hist)
+        hist, _ = np.histogram(dists, bins=10, density=False)
+        if hist.sum() == 0:
+            raise ValueError(f"Entropy cannot be computed on 0")
+        else:
+            hist = hist / hist.sum()
+            cluster_entropy = entropy(hist)
+        #cluster_entropy = entropy(hist)
         setattr(clust_met, "cluster_entropy", cluster_entropy)
     if len(cluster_metadata) == 1:
         return cluster_metadata[0]
@@ -752,8 +758,12 @@ def get_sample_indices(embeddings, weights, cluster_entropies, sample_ratio=0.5)
 def normalize_entropy(cluster_metadata: List[ClusterMetadata]):
     raw_entropies = np.array([clust.cluster_entropy for clust in cluster_metadata])
     max_entropy = np.max(raw_entropies)
+    print(np.isnan(raw_entropies).sum())
+    print(f"raw_entropies: {raw_entropies}")
+    print(f"max_entropy: {max_entropy}")
     for clust in cluster_metadata:
         normalized_entropy = clust.cluster_entropy / max_entropy
+        print(f"normalized_entropy: {normalized_entropy}")
         setattr(clust, "cluster_entropy", normalized_entropy)
     
     return cluster_metadata
@@ -768,6 +778,7 @@ def compute_combine_weight(cluster_metadata: List[ClusterMetadata],
     for clust in cluster_metadata:
         relative_cluster_size = clust.cluster_size / total_cluster_sizes
         weight = alpha * clust.cluster_entropy + (1 - alpha) * relative_cluster_size
+        print(f"weight: {weight}")
         setattr(clust, "relative_cluster_size", relative_cluster_size)
         setattr(clust, "cluster_weight", weight)
     return cluster_metadata
@@ -776,6 +787,9 @@ def set_cluster_sampling_size(cluster_metadata: List[ClusterMetadata],
                               total_sample_size
                               ):
     for clust in cluster_metadata:
+        print(f"clust.cluster_weight: {clust.cluster_weight}")
+        print(f"total_sample_size: {total_sample_size}")
+        print(f"clust.cluster_weight * total_sample_size: {clust.cluster_weight * total_sample_size}")
         cluster_sample_size = int(clust.cluster_weight * total_sample_size)
         setattr(clust, "cluster_sampling_size", cluster_sample_size)
         
@@ -834,4 +848,25 @@ def _entropy_based_sampling(img_list: List[str],
     return selected_imgs
         
         
+class ImageEntropyScore(EmbeddingExtractor):
+    def __init__(self, img_list: List[str], 
+                n_clusters: int,
+                model_type: str ="ViT-B/32",
+                sample_ratio: float = 0.5,
+                ):
+        super().__init__(img_list=img_list, model_type=model_type)
+        self.n_clusters = n_clusters
+        self.sample_ratio = sample_ratio
+        self.total_sample_size = int(len(img_list) * sample_ratio)
+        
+    def _extract_img_features(self):
+        normalized_embedding = super()._extract_img_features()
+        return normalized_embedding
+    
+    def compute_image_feature_entropy(self, embedding: np.ndarray):
+        if embedding.size == 1:
+            image_entropy = entropy(embedding)
+        else:
+            image_entropy = np.array([entropy(emb) for emb in embedding])
+        return image_entropy
         
