@@ -873,3 +873,91 @@ class ImageEntropyScore(EmbeddingExtractor):
             image_entropy = np.array([entropy(emb) for emb in embedding])
         return image_entropy
         
+
+
+from pandas import json_normalize
+
+def coco_annotation_to_df(coco_annotation_file):
+    with open(coco_annotation_file, "r") as annot_file:
+        annotation = json.load(annot_file)
+    annotations_df = json_normalize(annotation, "annotations")
+    annot_imgs_df = json_normalize(annotation, "images")
+    annot_cat_df = json_normalize(annotation, "categories")
+    annotations_images_merge_df = annotations_df.merge(annot_imgs_df, left_on='image_id', 
+                                                        right_on='id',
+                                                        suffixes=("_annotation", "_image"),
+                                                        how="outer"
+                                                        )
+    annotations_imgs_cat_merge = annotations_images_merge_df.merge(annot_cat_df, left_on="category_id", right_on="id",
+                                                                    suffixes=(None, '_categories'),
+                                                                    how="outer"
+                                                                    )
+    all_merged_df = annotations_imgs_cat_merge[['id_annotation', 'image_id','category_id', 'bbox', 'area', 'segmentation', 'iscrowd',
+                                'file_name', 'height', 'width', 'name', 'supercategory'
+                                ]]
+    all_merged_df.rename(columns={"name": "category_name",
+                                  "height": "image_height",
+                                  "width": "image_width"}, 
+                         inplace=True
+                         )
+    all_merged_df.dropna(subset=["file_name"], inplace=True)
+    return all_merged_df
+
+
+from typing import Literal
+
+def sample_rep_data(img_list,
+                    destination_img_dir,
+                    cluster_algorithm="meanshift",
+                    bandwidth=0.9,
+                    sample_ratio=0.5,
+                    coco_annotation_file=None,
+                    save_annotations_as=None,
+                    scoring_method: Literal['cluster-center', 'cluster-center-downweight'] = "cluster-center",
+                    kmeans_n_clusters: int = 20,
+                    bandwidth_quantile: float = 0.8,
+                    bandwidth_n_samples: int = 500,
+                    norm_method: Literal['local', 'global'] = "local"
+                    ):
+    os.makedirs(destination_img_dir, exist_ok=True)
+    save_ann_dir = os.path.dirname(save_annotations_as)
+    os.makedirs(save_ann_dir, exist_ok=True)
+    repsampler = RepresentativenessSampler(img_list=img_list,
+                                            cluster_algorithm=cluster_algorithm,
+                                            bandwidth=bandwidth,
+                                            norm_method=norm_method,
+                                            n_samples=bandwidth_n_samples,
+                                            quantile=bandwidth_quantile,
+                                            n_clusters=kmeans_n_clusters,
+                                            method=scoring_method
+                                            )
+    samples_obj = repsampler.sample(sample_ratio=sample_ratio)
+
+    selected_imgs = [obj[0] for obj in 
+                    samples_obj
+                    ]
+    if coco_annotation_file:
+        subset_coco_annotations(img_list=selected_imgs,
+                                coco_annotation_file=coco_annotation_file,
+                                save_annotations_as=save_annotations_as
+                                )
+
+    for img in selected_imgs:
+        shutil.copy(img, destination_img_dir)
+        
+        
+def export_data(coco_annotation_file, destination_img_dir,
+                save_annotations_as, img_list
+                ):
+    os.makedirs(destination_img_dir, exist_ok=True)
+    save_ann_dir = os.path.dirname(save_annotations_as)
+    os.makedirs(save_ann_dir, exist_ok=True)
+    if coco_annotation_file:
+        subset_coco_annotations(img_list=img_list,
+                                coco_annotation_file=coco_annotation_file,
+                                save_annotations_as=save_annotations_as
+                                )
+
+    for img in img_list:
+        shutil.copy(img, destination_img_dir)
+
