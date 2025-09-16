@@ -20,6 +20,7 @@ from scipy.stats import entropy
 from dataclasses import dataclass, field
 from copy import deepcopy    
 from abc import ABC, abstractmethod
+from representative_sampler.coco_annotation_utils import subset_coco_annotations
 
 
 logger = logging.getLogger(__name__)
