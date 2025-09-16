@@ -21,7 +21,8 @@ from dataclasses import dataclass, field
 from copy import deepcopy    
 from abc import ABC, abstractmethod
 from representative_sampler.coco_annotation_utils import subset_coco_annotations
-
+import shutil
+import json
 
 logger = logging.getLogger(__name__)
 
