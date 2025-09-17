@@ -586,7 +586,9 @@ class Entropy(EmbeddingExtractor):
         return self.normalized_embedding
 
     def base(self, #labels,
+            in_cluster_sampling_strategy: Literal["random", "entropy"],
              alpha: Optional[float]=None,
+            maximize_entropy: Union[bool, None] = True
              #ratio, num_centers, labels, database_keys, item_list, source
              ):
         if hasattr(self, "normalized_embedding"):
@@ -606,13 +608,6 @@ class Entropy(EmbeddingExtractor):
                                             ) 
                             for id, count in zip(cluster_ids, cluster_num_item_list)
                             ]
-        #print(cluster_metadata[0].cluster_indices)
-        # for cl in cluster_metadata:
-        #     print(cl.cluster_name)
-        #     print(cl.cluster_indices)
-        #     print(cl.cluster_size)
-        # exit()
-        
         cluster_metadata = compute_cluster_entropy(cluster_metadata=cluster_metadata,
                                                     embeddings=normalized_embedding
                                                     )
@@ -628,14 +623,31 @@ class Entropy(EmbeddingExtractor):
                                                     total_sample_size=self.total_sample_size
                                                     ) 
         selected_imgs = self.sample(img_list=self.img_list,
-                               cluster_metadata=cluster_metadata
-                               )
+                                    cluster_metadata=cluster_metadata,
+                                    in_cluster_sampling_strategy=in_cluster_sampling_strategy,
+                                    maximize_entropy=maximize_entropy
+                                    )
         return selected_imgs
     
-    def sample(self, img_list, cluster_metadata):
-        selected_items = _entropy_based_sampling(img_list=img_list, 
-                                                cluster_metadata=cluster_metadata
-                                                )
+    def sample(self, img_list, cluster_metadata,
+               in_cluster_sampling_strategy: Literal["random", "entropy"],
+               maximize_entropy: Union[bool, None] = True
+               ):
+        if in_cluster_sampling_strategy not in ["random", "entropy"]:
+            raise ValueError(f"{in_cluster_sampling_strategy} is not a valid value for in_cluster_sampling_strategy. in_cluster_sampling_strategy has to be one of random, entropy")
+        
+        if in_cluster_sampling_strategy == "entropy" and maximize_entropy == None:
+            raise ValueError(f"maximize_entropy parameter is required when in_cluster_sampling_strategy is set to entropy")
+        
+        if in_cluster_sampling_strategy == "random":
+            selected_items = _entropy_based_sampling(img_list=img_list, 
+                                                    cluster_metadata=cluster_metadata
+                                                    )
+        elif in_cluster_sampling_strategy == "entropy":
+            selected_items = _sample_with_image_entropy_score(img_list=img_list, 
+                                                            cluster_metadata=cluster_metadata,
+                                                            maximize_entropy=maximize_entropy
+                                                            )
         return selected_items
         
         
@@ -663,7 +675,25 @@ class Entropy(EmbeddingExtractor):
         # selected_items = np.array(item_list)[selected_item_indexes].tolist()
         # return selected_items #, None
 
-
+def _sample_with_image_entropy_score(img_list: List[str], 
+                                    cluster_metadata: Union[List[ClusterMetadata], 
+                                                            ClusterMetadata
+                                                            ],
+                                    maximize_entropy=True
+                                    ):
+    selected_imgs = []
+    for clust_met in cluster_metadata:
+        clustimg_entropy = clust_met.cluster_images_entropy
+        if maximize_entropy:
+        # entropies are expected to sorted in ascending order
+        # to get location of higest entroies we reverse the array
+            clustimg_entropy_indices = np.argsort(clustimg_entropy)[::-1]
+        else:
+            clustimg_entropy_indices = np.argsort(clustimg_entropy)
+        selected_entropy_indices = clustimg_entropy_indices[:clust_met.cluster_sampling_size + 1]
+        clust_selected_imgs = np.array(img_list)[selected_entropy_indices].tolist()
+        selected_imgs.extend(clust_selected_imgs)
+    return selected_imgs
 
 def match_num_item_for_cluster(ratio, dataset_len, cluster_num_item_list):
     total_num_selected_item = int(dataset_len * ratio) #math.ceil(dataset_len * ratio)
@@ -748,6 +778,18 @@ def compute_weights(cluster_metadata: List[ClusterMetadata]):
         weight = clust.cluster_entropy / total_entropy
         setattr(clust, "cluster_weight", weight)
     return cluster_metadata
+
+def compute_image_entropy_score(cluster_metadata: List[ClusterMetadata],
+                                embeddings: np.ndarray
+                                ):
+    entropy_computer = ImageEntropyScore(img_list=[], n_clusters=0)
+    for clust_met in cluster_metadata:
+        cluster_embeddings = embeddings[clust_met.cluster_indices]
+        clust_imgentropy = entropy_computer.compute_image_feature_entropy(embedding=cluster_embeddings)
+        setattr(clust_met, "cluster_images_entropy", clust_imgentropy)
+    return cluster_metadata
+    
+    
 
 
 def get_sample_indices(embeddings, weights, cluster_entropies, sample_ratio=0.5):
