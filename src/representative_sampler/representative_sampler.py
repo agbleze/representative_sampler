@@ -23,6 +23,7 @@ from abc import ABC, abstractmethod
 from representative_sampler.coco_annotation_utils import subset_coco_annotations
 import shutil
 import json
+from sklearn.mixture import GaussianMixture
 
 logger = logging.getLogger(__name__)
 
