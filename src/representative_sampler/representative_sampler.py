@@ -73,10 +73,6 @@ def sample_data(img_dir: str,
     cluster_random_result.export(output_dir, format=save_format, save_media=True)
     
 
-# class ImageUniqueness(object):
-#     def __init__(self, img_dir):
-#         self.img_dir = img_dir 
-
 @dataclass
 class ClusterMetadata:
     cluster_name: int = field(default_factory=int)
