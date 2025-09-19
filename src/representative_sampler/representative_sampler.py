@@ -24,6 +24,7 @@ from representative_sampler.coco_annotation_utils import subset_coco_annotations
 import shutil
 import json
 from sklearn.mixture import GaussianMixture
+from pandas import json_normalize
 
 logger = logging.getLogger(__name__)
 
@@ -920,7 +921,7 @@ class ImageEntropyScore(EmbeddingExtractor):
         
 
 
-from pandas import json_normalize
+
 
 def coco_annotation_to_df(coco_annotation_file):
     with open(coco_annotation_file, "r") as annot_file:
