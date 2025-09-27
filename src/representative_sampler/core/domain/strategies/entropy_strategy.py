@@ -92,3 +92,28 @@ class Entropy(EmbeddingExtractor):
         return selected_items
         
         
+        
+        
+class ImageEntropyScore(EmbeddingExtractor):
+    def __init__(self, img_list: List[str], 
+                n_clusters: int,
+                model_type: str ="ViT-B/32",
+                sample_ratio: float = 0.5,
+                ):
+        super().__init__(img_list=img_list, model_type=model_type)
+        self.n_clusters = n_clusters
+        self.sample_ratio = sample_ratio
+        self.total_sample_size = int(len(img_list) * sample_ratio)
+        
+    def _extract_img_features(self):
+        normalized_embedding = super()._extract_img_features()
+        return normalized_embedding
+    
+    def compute_image_feature_entropy(self, embedding: np.ndarray):
+        if embedding.size == 1:
+            image_entropy = entropy(embedding)
+        else:
+            image_entropy = np.array([entropy(emb) for emb in embedding])
+        return image_entropy
+        
+
