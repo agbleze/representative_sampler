@@ -30,8 +30,6 @@ logger = logging.getLogger(__name__)
 
 np.random.seed(0)
 
-# create an abstract class sampler that other representative samplers subclass
-# sample must have abstract methods - sample
 
 class Sampler(ABC):
     
