@@ -587,9 +587,6 @@ class ImageEntropyScore(EmbeddingExtractor):
         return image_entropy
         
 
-
-
-
 def coco_annotation_to_df(coco_annotation_file):
     with open(coco_annotation_file, "r") as annot_file:
         annotation = json.load(annot_file)
