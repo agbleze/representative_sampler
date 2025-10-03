@@ -2,7 +2,7 @@ from datumaro.components.dataset import Dataset
 from datumaro.components.environment import Environment
 from datumaro.components.algorithms.hash_key_inference.prune import Prune
 import os
-from typing import Literal, Union, List, Optional
+from typing import Literal, Union, List
 import torch
 import clip
 from PIL import Image
