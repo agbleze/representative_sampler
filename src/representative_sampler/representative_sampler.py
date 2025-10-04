@@ -324,7 +324,7 @@ class ClusteredRandom(EmbeddingExtractor):
 
         kmeans = KMeans(n_clusters=self.n_clusters, #num_centers, 
                         random_state=0)
-        clusters = kmeans.fit_predict(normalized_embedding) #(database_keys)
+        clusters = kmeans.fit_predict(normalized_embedding)
         cluster_ids, cluster_num_item_list = np.unique(clusters, return_counts=True)
 
         norm_cluster_num_item_list = match_num_item_for_cluster(self.sample_ratio,
