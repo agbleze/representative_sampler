@@ -305,10 +305,11 @@ def subset_coco_annotations(img_list, coco_annotation_file,
             images.append(image)
     
     # use only categories that are present in the subset annotations
-    
+    unique_annotation_cat_ids = set([ann["category_id"] for ann in annotations])
+    categories = [cat for cat in coco_data["categories"] if cat["id"] in unique_annotation_cat_ids ]
     subset_json = {"info": info,
                    "licenses": licenses,
-                   "categories": coco_data["categories"],
+                   "categories": categories,
                    "images": images,
                    "annotations": annotations,
                    "tag_categories": tag_categories
