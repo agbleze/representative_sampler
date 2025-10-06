@@ -1,5 +1,9 @@
 import math
 import random
+from typing import List, Literal, Union
+import numpy as np
+
+
 class Centroid(EmbeddingExtractor):
     """
     Select items through clustering with centers targeting the desired number.
@@ -22,7 +26,6 @@ class Centroid(EmbeddingExtractor):
     def base(self,
              ):
 
-        #num_selected_centers = int(len(self.img_list) * ratio) #math.ceil(len(item_list) * ratio)
         kmeans = KMeans(n_clusters=self.n_clusters, random_state=0)
         clusters = kmeans.fit_predict(self.normalized_embedding) #(database_keys)
         cluster_centers = kmeans.cluster_centers_
