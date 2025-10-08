@@ -4,22 +4,29 @@ from PIL import Image
 import numpy as np
 import sklearn.preprocessing as skp
 from representative_sampler.core.domain.strategies.base_embedder import Embedder
+from representative_sampler.core.domain.entities import EmbeddingResult
 
 
 
 
 
 
-class ClipEmbedder(Embedder) -> EmbeddingResult:
+class ClipEmbedder(Embedder):
     name = "clip"
     def __init__(self, img_list, model_type):
         self.img_list = img_list
         self.model_type = model_type
         ClipEmbedder.name = f"clip-{model_type}"
         
-    def embed(self):
+    def embed(self)-> EmbeddingResult:
         self.normalized_embedding = self.get_embeddings(self.img_list, self.model_type)
-        return self.normalized_embedding
+        
+        embedding_result = EmbeddingResult(embedder_name=ClipEmbedder.name,
+                                            embedding_name=self.img_list,
+                                            embedding=self.normalized_embedding
+                                            )
+        return embedding_result
+    
     
     def get_embeddings(self, img_list, model_type):
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -38,6 +45,7 @@ class ClipEmbedder(Embedder) -> EmbeddingResult:
         normalized_embedding = skp.normalize(embeddings_cpu_concat, 
                                                     axis=1
                                                     )
+        
         return normalized_embedding
     
     
