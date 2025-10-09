@@ -12,7 +12,7 @@ SCORER_REGISTRY = Registry()
 class BaseScorer(ABC):
     scorer_name: str = "base_scorer"
     status: Literal["stable", "experimental"] = "stable"
-    required = ["name", "status"]
+    required = ["scorer_name", "status"]
     valid_status_values = ["stable", "experimental"]
     
     def __init_subclass__(cls):
