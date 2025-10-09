@@ -5,8 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Literal
 from representative_sampler.core.domain.strategies.registry import Registry
 
-STABLE_SCORER_REGISTRY = Registry()
-EXPERIMENTAL_SCORER_REGISTRY = Registry()
+SCORER_REGISTRY = Registry()
 
 
 @dataclass
@@ -24,11 +23,8 @@ class BaseScorer(ABC):
         if cls.status not in cls.valid_status_values:
             raise ValueError(f"{cls.__name__} has invalid status '{cls.status}'. Valid values are {cls.valid_status_values}.")
 
-        if cls.status == "stable":
-            STABLE_SCORER_REGISTRY.register(cls.scorer_name, cls)
-        elif cls.status == "experimental":
-            EXPERIMENTAL_SCORER_REGISTRY.register(cls.scorer_name, cls)
-            
+        SCORER_REGISTRY.register(cls.scorer_name, cls, cls.status)
+        
     @abstractmethod
     def score(self, embeddings: np.ndarray, **kwargs) -> List[float]:
         raise NotImplementedError("Subclasses must implement the score method.")
