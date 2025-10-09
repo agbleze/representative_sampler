@@ -3,8 +3,7 @@ from representative_sampler.core.domain.entities import Sample
 from typing import List, Literal, Union
 from representative_sampler.core.domain.strategies.registry import Registry
 
-STABLE_SAMPLER_REGISTRY = Registry()
-EXPERIMENTAL_SAMPLER_REGISTRY = Registry()
+SAMPLER_REGISTRY = Registry()
 
 
 class Sampler(ABC):
@@ -23,12 +22,8 @@ class Sampler(ABC):
         if cls.status not in cls.valid_status_values:
             raise ValueError(f"{cls.__name__} has invalid status '{cls.status}'. Valid values are {cls.valid_status_values}.")
         
-        if cls.status == "stable":
-            STABLE_SAMPLER_REGISTRY.register(cls.sampler_name, cls)
-        elif cls.status == "experimental":
-            EXPERIMENTAL_SAMPLER_REGISTRY.register(cls.sampler_name, cls)
-        
-        
+        SAMPLER_REGISTRY.register(cls.sampler_name, cls, cls.status)
+
     @abstractmethod
     def sample(self):
         raise NotImplementedError("Subclasses must implement the sample method.")
