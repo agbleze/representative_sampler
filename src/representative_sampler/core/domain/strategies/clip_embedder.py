@@ -12,11 +12,11 @@ from representative_sampler.core.domain.entities import EmbeddingResult
 
 
 class ClipEmbedder(Embedder):
-    name = "clip"
+    embedder_name = "clip"
+    status = "stable"
     def __init__(self, img_list, model_type):
         self.img_list = img_list
         self.model_type = model_type
-        ClipEmbedder.name = f"clip-{model_type}"
         
     def embed(self)-> EmbeddingResult:
         self.normalized_embedding = self.get_embeddings(self.img_list, self.model_type)
