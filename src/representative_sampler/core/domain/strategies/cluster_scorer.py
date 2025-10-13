@@ -10,7 +10,7 @@ import copy
 import sklearn.cluster as skc
 from scipy.spatial import cKDTree
 import logging
-import logger
+from scipy.stats import entropy
 
 from ..entities import ClusterMetadata
 
