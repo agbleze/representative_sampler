@@ -26,6 +26,7 @@ class ProximityScorer(Scorer):
     def compute_distance_to_centroid(self, embeddings, centroid, *args, **kwargs):
          # Get distance from each point to it's closest cluster center
         dist = np.linalg.norm(embeddings - centroid, axis=1)
+        dist /= np.max(dist)  # normalize to [0,1]
         return dist
     
     def compute_proximity_score(self, embeddings_obj: EmbeddingResult, *args, **kwargs) -> ScoreCollection:
