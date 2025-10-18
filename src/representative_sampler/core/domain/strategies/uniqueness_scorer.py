@@ -1,13 +1,9 @@
-
-
 from representative_sampler.core.domain.strategies.base_scorer import BaseScorer
 from representative_sampler.core.domain.entities import EmbeddingResult, ScoringResult
 from representative_sampler.core.domain.strategies.object_collections import ScoreCollection
 import sklearn.preprocessing as skp
 import sklearn.neighbors as skn
 import numpy as np
-
-
 from typing import List, Union
 
 
