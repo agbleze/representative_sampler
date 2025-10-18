@@ -3,20 +3,52 @@ from representative_sampler.core.domain.entities import EmbeddingResult, Scoring
 from representative_sampler.core.domain.strategies.object_collections import ScoreCollection
 from typing import List, Literal, Union
 import numpy as np
-
+from representative_sampler.core.domain.strategies.representative_scorer import RepresentativeScorer
+from .utils import get_cls_init_params
 
 
 class ProximityScorer(Scorer):
     scorer_name = "proximity_scorer"
     status = "experimental"
     
-    def __init__(self, *args, **kwargs):
-        pass
+    def __init__(self, alpha=None, ensemble=False, *args, **kwargs):
+        if alpha is not None:
+            assert 0 <= alpha <= 1, "alpha must be between 0 and 1"
+        if ensemble:
+            assert alpha is not None, "alpha must be provided when ensemble is True"
+            
+        self.alpha = alpha
+        self.ensemble = ensemble
+        represcorer_init_params = get_cls_init_params(RepresentativeScorer)
+        represcorer_kwargs = {k:v for k,v in kwargs.items() if k in represcorer_init_params}
+        if represcorer_kwargs:
+            self.representative_scorer = RepresentativeScorer(**represcorer_kwargs)
     
     def score(self, embeddings: EmbeddingResult, **kwargs) -> ScoreCollection:
-        self.score_collection = self.compute_proximity_score(embeddings_obj=embeddings)
-        return self.score_collection
+        if not self.ensemble:
+            self.score_collection = self.compute_proximity_score(embeddings_obj=embeddings)
+            return self.score_collection
+        else:
+            self.score_collection = self.compute_ensemble_score(embeddings_obj=embeddings)
+            return self.score_collection
         
+    def compute_ensemble_score(self, embeddings_obj: EmbeddingResult, *args, **kwargs) -> ScoreCollection:
+        representative_scores = self.representative_scorer.score(embeddings=embeddings_obj)
+        proximity_scores = self.compute_proximity_score(embeddings_obj=embeddings_obj)
+        repre_weight = 1- self.alpha
+        combine_scores = []
+        for proximity_item in proximity_scores:
+            item_name = proximity_item.object_name
+            rep_score_item = next((rep_item for rep_item in representative_scores if rep_item.object_name == item_name), None)
+            if rep_score_item:
+                ensembel_score = (self.alpha * proximity_item.score) + (repre_weight * rep_score_item.score) 
+                combine_scores.append(ScoringResult(object_name=item_name,
+                                                    score=ensembel_score,
+                                                    scorer_name=self.scorer_name
+                                                    )
+                                      )
+        return ScoreCollection(combine_scores)
+    
     
     def compute_centroid(self, embeddings_obj, *args, **kwargs):
         embeddings = embeddings_obj.embedding
