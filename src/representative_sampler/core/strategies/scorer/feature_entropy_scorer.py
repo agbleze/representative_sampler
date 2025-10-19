@@ -30,8 +30,8 @@ class FeatureEntropyScorer(BaseScorer):
                                             score=score,
                                             scorer_name=self.scorer_name
                                             ) 
-                                             for embedding_nm, score, in zip(embedding_names, image_entropy)
-                                            ]
+                                for embedding_nm, score, in zip(embedding_names, image_entropy)
+                                ]
         return ScoreCollection(image_entropy_scores)
         
 
