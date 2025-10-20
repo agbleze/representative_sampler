@@ -14,14 +14,25 @@ class GMMEntropyScorer(BaseScorer):
     def __init__(self, *args, **kwargs):
         pass
     
-    def score(self, embedding_obj: EmbeddingResult, **kwargs) -> ScoreCollection:
-        embedding = embedding_obj.embedding
+    def score(self, *args, **kwargs) -> ScoreCollection:
+        pass
+    
+    def compute_entropy_score(self, embedding_obj: EmbeddingResult, **kwargs) -> ScoreCollection:
+        embeddings = embedding_obj.embedding
         embedding_names = embedding_obj.embedding_name
         
         
         gmm = GaussianMixture(n_components=10).fit(embeddings)
         _probs = gmm.predict_proba(embeddings)
-        _sample_entropies = entropy(_probs.T)  # entropy per sample
+        _sample_entropies = entropy(_probs.T) 
+        
+        entropy_scores = [ScoringResult(object_name=embedding_nm, 
+                                        score=score,
+                                        scorer_name=self.scorer_name
+                                        ) 
+                          for embedding_nm, score, in zip(embedding_names, _sample_entropies)
+                          ]
+        return ScoreCollection(entropy_scores)
 
     
 
