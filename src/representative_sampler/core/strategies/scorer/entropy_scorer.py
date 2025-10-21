@@ -11,13 +11,21 @@ class GMMEntropyScorer(BaseScorer):
     scorer_name = "gmm_entropy_scorer"
     status = "experimental"
     
-    def __init__(self, *args, **kwargs):
-        pass
+    def __init__(self, n_components, *args, **kwargs):
+        self.n_components = n_components
     
-    def score(self, *args, **kwargs) -> ScoreCollection:
-        pass
+    def score(self, embedding_obj, 
+              *args, **kwargs
+              ) -> ScoreCollection:
+        score_collection = self.compute_entropy_score(embedding_obj=embedding_obj,
+                                                      n_components=self.n_components
+                                                      )
+        return score_collection
     
-    def compute_entropy_score(self, embedding_obj: EmbeddingResult, **kwargs) -> ScoreCollection:
+    def compute_entropy_score(self, embedding_obj: EmbeddingResult, 
+                              n_components,
+                              **kwargs
+                              ) -> ScoreCollection:
         embeddings = embedding_obj.embedding
         embedding_names = embedding_obj.embedding_name
         
@@ -25,12 +33,13 @@ class GMMEntropyScorer(BaseScorer):
         gmm = GaussianMixture(n_components=10).fit(embeddings)
         _probs = gmm.predict_proba(embeddings)
         _sample_entropies = entropy(_probs.T) 
+        normalized_entropies = _sample_entropies / np.log(n_components)
         
         entropy_scores = [ScoringResult(object_name=embedding_nm, 
                                         score=score,
                                         scorer_name=self.scorer_name
                                         ) 
-                          for embedding_nm, score, in zip(embedding_names, _sample_entropies)
+                          for embedding_nm, score, in zip(embedding_names, normalized_entropies)
                           ]
         return ScoreCollection(entropy_scores)
 
