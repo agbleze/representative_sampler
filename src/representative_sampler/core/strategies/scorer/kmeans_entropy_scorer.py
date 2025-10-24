@@ -42,7 +42,7 @@ class KMeansEntropyScorer(BaseScorer):
             all_distances.append(distances)
         all_distances = np.array(all_distances)
         
-        all_probabilities = softmax(-all_distances, axis=1)
+        all_probabilities = softmax(all_distances)
         
         all_entropies = entropy(all_probabilities.T)
         normalized_entropies = all_entropies / np.log(n_clusters)
