@@ -6,6 +6,7 @@ import numpy as np
 import skfuzzy as fuzz
 from sklearn.mixture import GaussianMixture
 
+_SENTINEL = object()
 
 class GMMEntropyScorer(BaseScorer):
     scorer_name = "gmm_entropy_scorer"
@@ -50,11 +51,14 @@ class FCMEntropyScorer(BaseScorer):
     status = "experimental"
     
     def __init__(self, n_clusters,
-                 m, error, maxiter,
-                 init,
+                 m=4, error=0.005, maxiter=1000,
+                 init=None,
                  *args, **kwargs
                  ):
-        pass
+        self.n_clusters = n_clusters
+        self.m = m
+        self.error = error
+        self.maxiter = maxiter
     
     def score(self, embedding_obj: EmbeddingResult, **kwargs) -> ScoreCollection:
         pass
@@ -63,11 +67,10 @@ class FCMEntropyScorer(BaseScorer):
         embeddings = embedding_obj.embedding
         embedding_names = embedding_obj.embedding_name
         
-        fuzz.cluster.cmeans(
-        embeddings.T, c=n_centers, m=4,
-        error=0.005, maxiter=1000, init=None
-    )
-    
+        fuzz.cluster.cmeans(embeddings.T, c=self.n_centers, m=self.m,
+                            error=self.error, maxiter=self.maxiter, init=self.error
+                            )
+                        
     
     
     
