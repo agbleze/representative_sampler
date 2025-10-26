@@ -64,10 +64,14 @@ class FCMEntropyScorer(BaseScorer):
     
     def score(self, embedding_obj: EmbeddingResult, **kwargs) -> ScoreCollection:       
             
-        self.score_collection = self.compute_fuzzy_cmeans_entropy(embedding_obj=embedding_obj)
+        self.score_collection = self.compute_fuzzy_cmeans_entropy(embedding_obj=embedding_obj,
+                                                                  **kwargs
+                                                                  )
         return self.score_collection
     
-    def compute_fuzzy_cmeans_entropy(self, embedding_obj: EmbeddingResult, *args, **kwargs) -> ScoreCollection:
+    def compute_fuzzy_cmeans_entropy(self, embedding_obj: EmbeddingResult, 
+                                     *args, **kwargs
+                                     ) -> ScoreCollection:
         if "m" in kwargs:
             m = kwargs.get("m")
         else:
