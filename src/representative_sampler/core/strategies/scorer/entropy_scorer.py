@@ -19,19 +19,22 @@ class GMMEntropyScorer(BaseScorer):
               *args, **kwargs
               ) -> ScoreCollection:
         score_collection = self.compute_entropy_score(embedding_obj=embedding_obj,
-                                                      n_components=self.n_components
+                                                      **kwargs
                                                       )
         return score_collection
     
-    def compute_entropy_score(self, embedding_obj: EmbeddingResult, 
-                              n_components,
+    def compute_entropy_score(self, embedding_obj: EmbeddingResult,
                               **kwargs
                               ) -> ScoreCollection:
+        if "n_components" in kwargs:
+            n_components = kwargs.get("n_components")
+        else:
+            n_components = self.n_components
+            
         embeddings = embedding_obj.embedding
         embedding_names = embedding_obj.embedding_name
-        
-        
-        gmm = GaussianMixture(n_components=10).fit(embeddings)
+               
+        gmm = GaussianMixture(n_components=n_components).fit(embeddings)
         _probs = gmm.predict_proba(embeddings)
         _sample_entropies = entropy(_probs.T) 
         normalized_entropies = _sample_entropies / np.log(n_components)
@@ -111,7 +114,9 @@ class FCMEntropyScorer(BaseScorer):
                                         score=score,
                                         scorer_name=self.scorer_name
                                         ) 
-                          for embedding_nm, score, in zip(embedding_names, normalized_entropies)
+                          for embedding_nm, score, in zip(embedding_names, 
+                                                          normalized_entropies
+                                                          )
                           ]
         return ScoreCollection(entropy_scores)
     
