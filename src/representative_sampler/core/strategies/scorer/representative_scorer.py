@@ -1,4 +1,4 @@
-from representative_sampler.core.domain.strategies.base_scorer import BaseScorer
+from .base_scorer import BaseScorer
 from representative_sampler.core.domain.entities import EmbeddingResult, ScoringResult
 from representative_sampler.core.strategies.object_collections import ScoreCollection
 from typing import List, Literal, Union
