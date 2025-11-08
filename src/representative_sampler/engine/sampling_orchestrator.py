@@ -23,7 +23,8 @@ def run_sampler(sampler: Sampler,
                 importer: BaseImporter,
                 *args, **kwargs
                 ):
-    embeddings = embedder.get_embeddings()
+    img_list = importer.import_data(*args, **kwargs)
+    embeddings = embedder.get_embeddings(img_list=img_list)
     scores = scorer.score(embeddings=embeddings)
     samples = sampler.sample(score_collection=scores)
-    return samples
+    exporter.export_data(samples=samples)
