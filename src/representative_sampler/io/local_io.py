@@ -3,9 +3,12 @@ import shutil
 import os
 from representative_sampler import logger
 from representative_sampler.core.entities import SamplingResult
+from representative_sampler.core.object_collections import SampleCollection
 from glob import glob
 import concurrent.futures
 import itertools
+
+_SENTINEL = object()
 
 
 def copy_to_dest_dir(sample: SamplingResult, dest_dir: str):
@@ -50,13 +53,26 @@ class LocalExporter(BaseExporter):
     exporter_name = "local_exporter"
     status = "experimental"
     
-    def __init__(self, directory, *args, **kwargs):
+    def __init__(self, directory, 
+                validity_check: bool = True,
+
+                 *args, **kwargs):
         self.directory = directory
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
+            
+        self.validity_check = validity_check
         logger.info(f"{self.exporter_name} initialized with output directory: {self.output_dir}")
     
-    def export_data(self, samples: SamplingResult, *args, **kwargs):
+    def export_data(self, samples: SampleCollection, 
+                    validity_check: bool = _SENTINEL,
+                    *args, **kwargs
+                    ):
+        if validity_check is _SENTINEL:
+            validity_check = self.validity_check
+        if validity_check:
+            samples.validity_check()
+            
         logger.info(f"{self.exporter_name}: Exporting {len(samples)} samples to: {self.directory}")
         multiprocess_copy(sample_collection=samples, 
                           dest_dir=self.directory,
