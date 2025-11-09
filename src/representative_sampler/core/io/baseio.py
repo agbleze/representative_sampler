@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from ..registry import registry
+
 
 class BaseImporter(object):
     importer_name: str = "base_importer"
@@ -14,6 +16,8 @@ class BaseImporter(object):
                 raise NotImplementedError(f"{cls.__name__} requires definining a '{nm}' class attribute because it is a Subclass of BaseImporter.")
         if cls.status not in cls.valid_status_values:
             raise ValueError(f"{cls.__name__} has invalid status '{cls.status}'. Valid values are {cls.valid_status_values}.")
+        registry.register(cls.importer_name, cls, cls.status)
+      
         
     @abstractmethod
     def import_data(self, *args, **kwargs):
