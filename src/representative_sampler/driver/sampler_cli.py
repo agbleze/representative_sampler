@@ -42,20 +42,7 @@ def run_sampler_with_config():
             msg = f"Error reading configuration file: {e}"
             logger.error(msg)
             raise e
-        
-        try:
-            params = config["params"]
-        except KeyError:
-            msg = "Missing 'params' section in configuration."
-            logger.error(msg)
-            raise KeyError(msg)
-    
-    for param_key in params:
-        if param_key not in _REQUIRED_CONFIG_SECTIONS:
-            msg = f"Unknown config param: {param_key}. Required config params are: {_REQUIRED_CONFIG_KEYS}"
-            logger.error(msg)
-            raise KeyError(msg)
-    
+
     config_keys = set(config.keys())
     if config_keys == _REQUIRED_CONFIG_SECTIONS:
         logger.info(f"All required config params are present.")
@@ -114,3 +101,6 @@ def run_sampler_with_config():
                 )
     logger.info("Sampling process completed successfully")
     
+
+if __name__ == "__main__":
+    run_sampler_with_config()
