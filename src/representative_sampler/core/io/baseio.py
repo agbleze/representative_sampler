@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from ..registry import registry
 
 
-class BaseImporter(object):
+class BaseImporter(ABC):
     importer_name: str = "base_importer"
     status: str = "stable"
     valid_status_values = ["stable", "experimental"]
@@ -16,7 +16,10 @@ class BaseImporter(object):
                 raise NotImplementedError(f"{cls.__name__} requires definining a '{nm}' class attribute because it is a Subclass of BaseImporter.")
         if cls.status not in cls.valid_status_values:
             raise ValueError(f"{cls.__name__} has invalid status '{cls.status}'. Valid values are {cls.valid_status_values}.")
-        registry.register(cls.importer_name, cls, cls.status)
+        registry.register(name=cls.importer_name, 
+                          cls=cls, 
+                          status=cls.status
+                          )
       
         
     @abstractmethod
@@ -24,7 +27,7 @@ class BaseImporter(object):
         raise NotImplementedError("Subclasses must implement the import_data method.")
 
 
-class BaseExporter(object):
+class BaseExporter(ABC):
     exporter_name: str = "base_exporter"
     status: str = "stable"
     valid_status_values = ["stable", "experimental"]
@@ -38,6 +41,10 @@ class BaseExporter(object):
                 raise NotImplementedError(f"{cls.__name__} requires definining a '{nm}' class attribute because it is a Subclass of BaseExporter.")
         if cls.status not in cls.valid_status_values:
             raise ValueError(f"{cls.__name__} has invalid status '{cls.status}'. Valid values are {cls.valid_status_values}.")
+        registry.register(name=cls.exporter_name, 
+                          cls=cls, 
+                          status=cls.status
+                          )
         
     @abstractmethod
     def export_data(self, *args, **kwargs):
