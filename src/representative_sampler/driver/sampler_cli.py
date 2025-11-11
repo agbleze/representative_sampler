@@ -52,9 +52,7 @@ def run_sampler_with_config():
         logger.error(msg)
         raise KeyError(msg)
     logger.info(f"Successfully checked config params")
-    
-    
-    
+      
     logger.info("Start Reading config params")
     try:
         importer_name = config["importer"]["name"]
