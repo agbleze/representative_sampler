@@ -22,6 +22,11 @@ sphinx-autoapi = "^3.3.2"
 sphinx-rtd-theme = "^2.0.0"
 sphinx = "7.4.7"
 
+[tool.semantic_release]
+version_toml = ["pyproject.toml:tool.poetry.version"]
+version_variable = ["src/representative_sampler/__init__.py:__version__"]
+build_command = "pip install poetry && poetry build"
+
 [tool.semantic_release.branch.main]
 changelog_file = "CHANGELOG.md"
 
@@ -39,3 +44,6 @@ default = "semantic-release <auto-build>"
 [tool.semantic_release.publish]
 upload_to_vcs_release=true
 dist_glob_patterns = ["dist/"]
+
+[tool.poetry.scripts]
+sampler = "representative_sampler.driver.sampler_cli:run_sampler_with_config"
