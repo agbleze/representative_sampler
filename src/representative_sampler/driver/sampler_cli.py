@@ -57,29 +57,35 @@ def run_sampler_with_config():
     try:
         importer_name = config["importer"]["name"]
         importer_params = config["importer"]["params"]
+        importer_status = config["importer"]["status"]
         
         embedder_name = config["embedder"]["name"]
         embedder_params = config["embedder"]["params"]
+        embedder_status = config["embedder"]["status"]
         
         scorer_name = config["scorer"]["name"]
         scorer_params = config["scorer"]["params"]
+        scorer_status = config["scorer"]["status"]
         
         sampler_name = config["sampler"]["name"]
         sampler_params = config["sampler"]["params"]
+        sampler_status = config["sampler"]["status"]
         
         exporter_name = config["exporter"]["name"]
         exporter_params = config["exporter"]["params"]
+        exporter_status = config["exporter"]["status"]  
+        
     except KeyError as e:
         msg = f"Missing required config section or key: {e}"
         logger.error(msg)
         raise KeyError(msg)
     
     logger.info("Retrieving components from registry")
-    importer = registry.get(importer_name)
-    embedder = registry.get(embedder_name)
-    scorer = registry.get(scorer_name)
-    sampler = registry.get(sampler_name)
-    exporter = registry.get(exporter_name)
+    importer = registry.get(name=importer_name, status=importer_status)
+    embedder = registry.get(name=embedder_name, status=embedder_status)
+    scorer = registry.get(name=scorer_name, status=scorer_status)
+    sampler = registry.get(name=sampler_name, status=sampler_status)
+    exporter = registry.get(name=exporter_name, status=exporter_status)
     logger.info("Components retrieved successfully")
     
     logger.info("Instantiating components with parameters")
