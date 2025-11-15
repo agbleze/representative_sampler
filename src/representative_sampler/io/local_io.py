@@ -55,13 +55,23 @@ class LocalExporter(BaseExporter):
     
     def __init__(self, directory, 
                 validity_check: bool = True,
-
+                coco_annotation_file: str = None,
                  *args, **kwargs):
         self.directory = directory
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
             
         self.validity_check = validity_check
+        
+        if coco_annotation_file:
+            msg = f"coco_annotation_file: {coco_annotation_file} not found."
+            if not os.path.exists(coco_annotation_file):
+                logger.error(msg)
+                raise FileNotFoundError(msg)
+            else:
+                self.coco_annotation_file = coco_annotation_file
+        else:
+            self.coco_annotation_file = coco_annotation_file
         logger.info(f"{self.exporter_name} initialized with output directory: {self.output_dir}")
     
     def export_data(self, samples: SampleCollection, 
