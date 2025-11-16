@@ -7,6 +7,7 @@ from representative_sampler.core.object_collections import SampleCollection
 from glob import glob
 import concurrent.futures
 import itertools
+from ..core.utils.coco_annotation_utils import subset_coco_annotations
 
 _SENTINEL = object()
 
@@ -56,6 +57,7 @@ class LocalExporter(BaseExporter):
     def __init__(self, directory, 
                 validity_check: bool = True,
                 coco_annotation_file: str = None,
+                save_annotations_as: str = "annotations_subset.json",
                  *args, **kwargs):
         self.directory = directory
         if not os.path.exists(self.output_dir):
@@ -72,19 +74,34 @@ class LocalExporter(BaseExporter):
                 self.coco_annotation_file = coco_annotation_file
         else:
             self.coco_annotation_file = coco_annotation_file
+        self.save_annotations_as = save_annotations_as
+        
         logger.info(f"{self.exporter_name} initialized with output directory: {self.output_dir}")
     
     def export_data(self, samples: SampleCollection, 
                     validity_check: bool = _SENTINEL,
+                    coco_annotation_file: str = _SENTINEL,
+                    save_annotations_as: str = _SENTINEL,
                     *args, **kwargs
                     ):
         if validity_check is _SENTINEL:
             validity_check = self.validity_check
         if validity_check:
             samples.validity_check()
+        
+        if coco_annotation_file is _SENTINEL:
+            coco_annotation_file = self.coco_annotation_file
+        if save_annotations_as is _SENTINEL:
+            save_annotations_as = self.save_annotations_as
             
         logger.info(f"{self.exporter_name}: Exporting {len(samples)} samples to: {self.directory}")
         multiprocess_copy(sample_collection=samples, 
                           dest_dir=self.directory,
                           )
+        img_list = [sample.name for sample in samples]
+        if coco_annotation_file:
+            subset_coco_annotations(img_list==img_list,
+                                    coco_annotation_file=coco_annotation_file,
+                                    save_annotations_as=save_annotations_as
+                                    )
         logger.info(f"{self.exporter_name}: Data export successfully completed.")
