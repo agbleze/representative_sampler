@@ -4,7 +4,7 @@ from PIL import Image
 import numpy as np
 import sklearn.preprocessing as skp
 from .base_embedder import Embedder
-from representative_sampler.core.domain.entities import EmbeddingResult
+from representative_sampler.core.entities import EmbeddingResult
 
 
 _SENTINEL = object()
@@ -12,10 +12,9 @@ _SENTINEL = object()
 class ClipEmbedder(Embedder):
     embedder_name = "clip"
     status = "stable"
-    def __init__(self, #img_list,
+    def __init__(self,
                  model_type
                  ):
-        #self.img_list = img_list
         self.model_type = model_type
         
     def embed(self)-> EmbeddingResult:
