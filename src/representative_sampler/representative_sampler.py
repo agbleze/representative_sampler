@@ -20,7 +20,7 @@ from scipy.stats import entropy
 from dataclasses import dataclass, field
 from copy import deepcopy    
 from abc import ABC, abstractmethod
-from representative_sampler.coco_annotation_utils import subset_coco_annotations
+from representative_sampler.core.utils.coco_annotation_utils import subset_coco_annotations
 import shutil
 import json
 from sklearn.mixture import GaussianMixture
@@ -80,9 +80,6 @@ class ClusterMetadata:
     cluster_sampling_size: int = field(default_factory=int)
     cluster_indices: Union[np.ndarray, int] = field(default_factory=int)
     
-    #def __post_init__(self):
-        #self.cluster_sampling_size = 
-        
 
 def get_embeddings(img_list, model_type):
     device = "cuda" if torch.cuda.is_available() else "cpu"
