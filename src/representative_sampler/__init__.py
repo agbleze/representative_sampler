@@ -1,5 +1,14 @@
-# read version from installed package
 from importlib.metadata import version
 import logging
-__version__ = version("representative_sampler")
-__package_name__ = __name__
+
+package_name = __name__
+__version__ = version(package_name)
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.DEBUG, 
+                    format="%(asctime)s - %(levelname)s - %(message)s",
+                    filemode="a",
+                    filename="sampler.logs"
+                    )
+
+logger.info(f"{package_name} version {__version__}")
