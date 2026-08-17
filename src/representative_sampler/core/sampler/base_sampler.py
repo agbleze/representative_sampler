@@ -1,10 +1,7 @@
 from abc import ABC, abstractmethod
-from representative_sampler.core.domain.entities import Sample
-from typing import List, Literal, Union
-from representative_sampler.core.domain.strategies.registry import Registry
+from representative_sampler.core.entities import Sample
+from typing import List, Literal
 from ..registry import registry
-
-#SAMPLER_REGISTRY = Registry()
 
 
 class Sampler(ABC):
