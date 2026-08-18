@@ -1,6 +1,6 @@
 from representative_sampler.core.sampler.base_sampler import Sampler
 from representative_sampler.core.object_collections import SampleCollection, ScoreCollection
-from representative_sampler.core.entities import EmbeddingResult, ScoringResult, SamplingResult
+from representative_sampler.core.entities import SamplingResult
 from typing import Union, List, Literal
 from copy import deepcopy
 import os
