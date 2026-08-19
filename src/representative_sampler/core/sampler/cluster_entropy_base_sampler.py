@@ -4,7 +4,6 @@ from representative_sampler.core.entities import SamplingResult
 from typing import Union, List, Literal
 from copy import deepcopy
 import os
-from pathlib import Path
 from ..entities import ClusterMetadata
 
 
