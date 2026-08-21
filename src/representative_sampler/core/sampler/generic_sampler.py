@@ -1,6 +1,6 @@
 from .base_sampler import Sampler
 from representative_sampler.core.object_collections import SampleCollection, ScoreCollection
-from typing import List, Literal
+from typing import Literal
 import numpy as np
 
 _SENTINEL = object()
